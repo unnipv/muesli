@@ -788,6 +788,10 @@ enum MeetingSummaryClient {
                 return nil
             }
             let title = content.trimmingCharacters(in: .whitespacesAndNewlines.union(.init(charactersIn: "\"")))
+            guard !title.isEmpty else {
+                fputs("[summary] Ollama title generation: trimmed response is empty\n", stderr)
+                return nil
+            }
             fputs("[summary] Ollama generated title: \(title)\n", stderr)
             return title
         } catch let error as MeetingSummaryError {
