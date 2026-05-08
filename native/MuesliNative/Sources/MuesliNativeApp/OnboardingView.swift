@@ -821,6 +821,7 @@ struct OnboardingView: View {
 
                 Button {
                     if grantingPermissionName == step.name && !isConfirmingGrant {
+                        guard !isWaitingForNativePermissionPrompt(step.name) else { return }
                         openSystemSettingsForPermission(at: displayIndex)
                     } else {
                         grantingPermissionName = step.name
@@ -844,7 +845,7 @@ struct OnboardingView: View {
                     .clipShape(RoundedRectangle(cornerRadius: MuesliTheme.cornerSmall))
                 }
                 .buttonStyle(.plain)
-                .disabled(isConfirmingGrant)
+                .disabled(isConfirmingGrant || isWaitingForNativePermissionPrompt(step.name))
                 .animation(.easeInOut(duration: 0.2), value: isConfirmingGrant)
 
                 // Progress dots
@@ -918,8 +919,13 @@ struct OnboardingView: View {
 
     private func permissionButtonTitle(for permissionName: String, isConfirmingGrant: Bool) -> String {
         if isConfirmingGrant { return "Granted" }
+        if isWaitingForNativePermissionPrompt(permissionName) { return "Waiting for macOS..." }
         if grantingPermissionName == permissionName { return "Open Settings" }
         return "Grant Permission"
+    }
+
+    private func isWaitingForNativePermissionPrompt(_ permissionName: String) -> Bool {
+        permissionName == "Accessibility" && grantingPermissionName == permissionName
     }
 
     private func switchToVoiceNotesOnly() {
