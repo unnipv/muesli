@@ -528,6 +528,14 @@ struct AppConfigTests {
         #expect(config.resolvedOnboardingUseCase == .dictation)
     }
 
+    @Test("voice notes use push-to-talk without paste dictation")
+    func voiceNotesUsePushToTalkWithoutPasteDictation() {
+        #expect(OnboardingUseCase.voiceNotes.includesVoiceNotes)
+        #expect(OnboardingUseCase.voiceNotes.includesPushToTalk)
+        #expect(!OnboardingUseCase.voiceNotes.includesDictation)
+        #expect(!OnboardingUseCase.voiceNotes.includesMeetings)
+    }
+
     @Test("scheduled meeting notifications inherit legacy detection opt-out")
     func scheduledMeetingNotificationsInheritLegacyDetectionOptOut() throws {
         let json = """
@@ -918,11 +926,11 @@ struct WordCountTests {
 @Suite("HotkeyConfig")
 struct HotkeyConfigTests {
 
-    @Test("default is Left Cmd")
+    @Test("default is Right Option")
     func defaultConfig() {
         let config = HotkeyConfig.default
-        #expect(config.keyCode == 55)
-        #expect(config.label == "Left Cmd")
+        #expect(config.keyCode == 61)
+        #expect(config.label == "Right Option")
     }
 
     @Test("computer use default is Right Cmd")
@@ -938,14 +946,49 @@ struct HotkeyConfigTests {
         #expect(HotkeyConfig.computerUseDefault(avoiding: .computerUseDefault) == .default)
     }
 
+    @Test("hotkey policy blocks active duplicate shortcuts")
+    func hotkeyPolicyBlocksActiveDuplicateShortcuts() {
+        #expect(ShortcutHotkeyPolicy.validateDictationHotkey(
+            .computerUseDefault,
+            computerUseHotkey: .computerUseDefault,
+            isComputerUseEnabled: true
+        ) == .conflict(message: ShortcutHotkeyPolicy.conflictMessage))
+
+        #expect(ShortcutHotkeyPolicy.validateDictationHotkey(
+            .computerUseDefault,
+            computerUseHotkey: .computerUseDefault,
+            isComputerUseEnabled: false
+        ) == .updated)
+
+        #expect(ShortcutHotkeyPolicy.validateComputerUseHotkey(
+            .default,
+            dictationHotkey: .default
+        ) == .conflict(message: ShortcutHotkeyPolicy.conflictMessage))
+    }
+
+    @Test("hotkey policy moves computer use key when enabling with a stale conflict")
+    func hotkeyPolicyMovesComputerUseKeyWhenEnablingWithStaleConflict() {
+        let resolution = ShortcutHotkeyPolicy.resolvedComputerUseHotkeyWhenEnabling(
+            currentHotkey: .default,
+            dictationHotkey: .default
+        )
+
+        #expect(resolution.hotkey == .computerUseDefault)
+        #expect(resolution.result.didUpdate)
+        #expect(resolution.result.message == "Computer Use Command moved to Right Cmd to avoid matching Push to Talk.")
+    }
+
     @Test("label for known key codes")
     func knownKeyCodes() {
         #expect(HotkeyConfig.label(for: 55) == "Left Cmd")
         #expect(HotkeyConfig.label(for: 54) == "Right Cmd")
         #expect(HotkeyConfig.label(for: 63) == "Fn")
         #expect(HotkeyConfig.label(for: 59) == "Left Ctrl")
+        #expect(HotkeyConfig.label(for: 62) == "Right Ctrl")
         #expect(HotkeyConfig.label(for: 58) == "Left Option")
+        #expect(HotkeyConfig.label(for: 61) == "Right Option")
         #expect(HotkeyConfig.label(for: 56) == "Left Shift")
+        #expect(HotkeyConfig.label(for: 60) == "Right Shift")
     }
 
     @Test("unknown key code returns nil")

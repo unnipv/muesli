@@ -5,6 +5,20 @@ import Sparkle
 import TelemetryDeck
 import MuesliCore
 
+private enum DictationOutputMode {
+    case paste
+    case voiceNote
+
+    var pasteMethod: String {
+        switch self {
+        case .paste:
+            return "clipboard_restore"
+        case .voiceNote:
+            return "voice_note"
+        }
+    }
+}
+
 struct MeetingResummarizationPlan: Equatable {
     let promptTitle: String
     let persistedTitle: String
@@ -121,6 +135,7 @@ final class MuesliController: NSObject {
     private var staleLiveMeetingRecoveryFailures = Set<Int64>()
     private var dictationState: DictationState = .idle
     private var dictationStartedAt: Date?
+    private var currentDictationOutputMode: DictationOutputMode = .paste
     private var computerUseCommandStartedAt: Date?
     private var computerUseCommandTask: Task<Void, Never>?
     private var computerUseFloatingStatusWorkItem: DispatchWorkItem?
@@ -209,7 +224,7 @@ final class MuesliController: NSObject {
             && hasRequiredStartupPermissions(for: config.resolvedOnboardingUseCase)
 
         // Defer permission-triggering monitors until after onboarding
-        if canRunMainApp && config.resolvedOnboardingUseCase.includesDictation {
+        if canRunMainApp && config.resolvedOnboardingUseCase.includesPushToTalk {
             hotkeyMonitor.targetKeyCode = config.dictationHotkey.keyCode
             hotkeyMonitor.start()
             startComputerUseHotkeyMonitorIfNeeded()
@@ -1033,19 +1048,64 @@ final class MuesliController: NSObject {
         updateConfig { $0.customWords.removeAll { $0.id == id } }
     }
 
-    func updateDictationHotkey(_ hotkey: HotkeyConfig) {
+    @discardableResult
+    func updateDictationHotkey(_ hotkey: HotkeyConfig) -> ShortcutHotkeyUpdateResult {
+        let result = ShortcutHotkeyPolicy.validateDictationHotkey(
+            hotkey,
+            computerUseHotkey: config.computerUseHotkey,
+            isComputerUseEnabled: config.enableComputerUseHotkey
+        )
+        guard result.didUpdate else {
+            fputs("[hotkeys] rejected dictation hotkey because it matches computer use hotkey\n", stderr)
+            return result
+        }
         updateConfig { $0.dictationHotkey = hotkey }
         hotkeyMonitor.configure(keyCode: hotkey.keyCode)
         configureComputerUseHotkeyMonitor()
+        return result
     }
 
-    func updateComputerUseHotkey(_ hotkey: HotkeyConfig) {
+    @discardableResult
+    func updateComputerUseHotkey(_ hotkey: HotkeyConfig) -> ShortcutHotkeyUpdateResult {
+        let result = ShortcutHotkeyPolicy.validateComputerUseHotkey(
+            hotkey,
+            dictationHotkey: config.dictationHotkey
+        )
+        guard result.didUpdate else {
+            fputs("[hotkeys] rejected computer use hotkey because it matches dictation hotkey\n", stderr)
+            return result
+        }
         updateConfig { $0.computerUseHotkey = hotkey }
         configureComputerUseHotkeyMonitor()
+        return result
     }
 
-    func updateComputerUseHotkeyEnabled(_ enabled: Bool) {
+    @discardableResult
+    func updateComputerUseHotkeyEnabled(_ enabled: Bool) -> ShortcutHotkeyUpdateResult {
+        if enabled {
+            let resolution = ShortcutHotkeyPolicy.resolvedComputerUseHotkeyWhenEnabling(
+                currentHotkey: config.computerUseHotkey,
+                dictationHotkey: config.dictationHotkey
+            )
+            updateConfig { config in
+                config.computerUseHotkey = resolution.hotkey
+                config.enableComputerUseHotkey = true
+            }
+            configureComputerUseHotkeyMonitor()
+            return resolution.result
+        }
         updateConfig { $0.enableComputerUseHotkey = enabled }
+        configureComputerUseHotkeyMonitor()
+        return .updated
+    }
+
+    func resetShortcutDefaults() {
+        updateConfig { config in
+            config.dictationHotkey = .default
+            config.computerUseHotkey = .computerUseDefault
+            config.enableComputerUseHotkey = false
+        }
+        hotkeyMonitor.configure(keyCode: HotkeyConfig.default.keyCode)
         configureComputerUseHotkeyMonitor()
     }
 
@@ -1323,7 +1383,7 @@ final class MuesliController: NSObject {
             config.meetingTranscriptionModel = backend.model
             config.dictationHotkey = hotkey
             config.computerUseHotkey = HotkeyConfig.computerUseDefault(avoiding: hotkey)
-            config.enableComputerUseHotkey = true
+            config.enableComputerUseHotkey = false
             config.enableComputerUsePlanner = true
             config.onboardingUseCase = onboardingUseCase.rawValue
             if let summaryBackend {
@@ -1350,7 +1410,7 @@ final class MuesliController: NSObject {
         onboardingWindowController?.close()
         onboardingWindowController = nil
         if hasRequiredStartupPermissions(for: onboardingUseCase) {
-            if onboardingUseCase.includesDictation {
+            if onboardingUseCase.includesPushToTalk {
                 hotkeyMonitor.start()
                 startComputerUseHotkeyMonitorIfNeeded()
             }
@@ -1360,8 +1420,12 @@ final class MuesliController: NSObject {
             }
             TelemetryDeck.signal("onboarding.completed", parameters: [
                 "use_case": onboardingUseCase.rawValue,
+                "voice_notes_selected": onboardingUseCase.includesVoiceNotes ? "true" : "false",
                 "dictation_selected": onboardingUseCase.includesDictation ? "true" : "false",
                 "meetings_selected": onboardingUseCase.includesMeetings ? "true" : "false",
+                "microphone_granted": AVCaptureDevice.authorizationStatus(for: .audio) == .authorized ? "true" : "false",
+                "accessibility_granted": AXIsProcessTrusted() ? "true" : "false",
+                "input_monitoring_granted": CGPreflightListenEventAccess() ? "true" : "false",
             ])
             let completionTab = OnboardingFlow.completionTab(for: onboardingUseCase)
             openHistoryWindow(tab: completionTab)
@@ -1396,18 +1460,42 @@ final class MuesliController: NSObject {
     }
 
     private func hasRequiredStartupPermissions(for useCase: OnboardingUseCase) -> Bool {
-        if !useCase.includesDictation {
-            return AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
-        }
-        return OnboardingPermissionGate.hasRequiredDictationPermissions(
+        OnboardingPermissionGate.hasRequiredPermissions(
             OnboardingPermissionSnapshot(
                 microphone: AVCaptureDevice.authorizationStatus(for: .audio) == .authorized,
                 accessibility: AXIsProcessTrusted(),
                 inputMonitoring: CGPreflightListenEventAccess(),
                 systemAudio: false,
                 screenRecording: false
-            )
+            ),
+            for: useCase
         )
+    }
+
+    func promoteVoiceNotesToDictationIfReady(
+        microphoneGranted: Bool,
+        accessibilityGranted: Bool,
+        inputMonitoringGranted: Bool
+    ) {
+        guard config.resolvedOnboardingUseCase == .voiceNotes else { return }
+        guard OnboardingPermissionGate.hasRequiredDictationPermissions(
+            OnboardingPermissionSnapshot(
+                microphone: microphoneGranted,
+                accessibility: accessibilityGranted,
+                inputMonitoring: inputMonitoringGranted,
+                systemAudio: false,
+                screenRecording: false
+            )
+        ) else { return }
+
+        updateConfig { $0.onboardingUseCase = OnboardingUseCase.dictation.rawValue }
+        hotkeyMonitor.configure(keyCode: config.dictationHotkey.keyCode)
+        hotkeyMonitor.start()
+        startComputerUseHotkeyMonitorIfNeeded()
+        TelemetryDeck.signal("onboarding.capability_promoted", parameters: [
+            "from_use_case": OnboardingUseCase.voiceNotes.rawValue,
+            "to_use_case": OnboardingUseCase.dictation.rawValue,
+        ])
     }
 
     private func ensureBasicDictationPermissionsBeforeDashboard() -> Bool {
@@ -2808,6 +2896,7 @@ final class MuesliController: NSObject {
 
     private func setState(_ state: DictationState) {
         dictationState = state
+        appState.dictationState = state
         let status: String
         switch state {
         case .idle: status = "Idle"
@@ -3315,6 +3404,20 @@ final class MuesliController: NSObject {
         }
     }
 
+    private var defaultDictationOutputMode: DictationOutputMode {
+        config.resolvedOnboardingUseCase.includesVoiceNotes ? .voiceNote : .paste
+    }
+
+    private func beginDictationOutput(mode: DictationOutputMode? = nil) {
+        currentDictationOutputMode = mode ?? defaultDictationOutputMode
+        appState.isVoiceNoteRecording = currentDictationOutputMode == .voiceNote
+    }
+
+    private func resetDictationOutputMode() {
+        currentDictationOutputMode = .paste
+        appState.isVoiceNoteRecording = false
+    }
+
     private func handleStart() {
         if isMeetingRecording() { return }
 
@@ -3328,6 +3431,7 @@ final class MuesliController: NSObject {
 
         fputs("[muesli-native] recording start\n", stderr)
         meetingMonitor.suppressWhileActive()
+        beginDictationOutput()
 
         do {
             try recorder.start()
@@ -3351,6 +3455,7 @@ final class MuesliController: NSObject {
             SoundController.playDictationStart(enabled: config.soundEnabled && !isDictationTestMode)
         } catch {
             fputs("[muesli-native] recorder start failed: \(error)\n", stderr)
+            resetDictationOutputMode()
             setState(.idle)
             meetingMonitor.resumeAfterCooldown()
             meetingMonitor.refreshState()
@@ -3387,6 +3492,7 @@ final class MuesliController: NSObject {
     private func handleCancel() {
         if isMeetingRecording() { return }
         fputs("[muesli-native] cancel\n", stderr)
+        resetDictationOutputMode()
 
         if isNemotronStreaming {
             isNemotronStreaming = false
@@ -3404,13 +3510,15 @@ final class MuesliController: NSObject {
         meetingMonitor.resumeAfterCooldown()
     }
 
-    private func handleToggleStart() {
+    private func handleToggleStart(outputMode: DictationOutputMode? = nil) {
         if isMeetingRecording() { return }
         fputs("[muesli-native] toggle dictation start\n", stderr)
         meetingMonitor.suppressWhileActive()
+        beginDictationOutput(mode: outputMode)
 
         // Nemotron streaming: live text at cursor in handsfree mode too
         if selectedBackend.backend == "nemotron" {
+            resetDictationOutputMode()
             if #available(macOS 15, *) {
                 isNemotronStreaming = true
                 previousStreamText = ""
@@ -3439,6 +3547,7 @@ final class MuesliController: NSObject {
             indicator.setToggleDictation(true, config: config)
         } catch {
             fputs("[muesli-native] toggle start failed: \(error)\n", stderr)
+            resetDictationOutputMode()
             setState(.idle)
             meetingMonitor.resumeAfterCooldown()
             meetingMonitor.refreshState()
@@ -3449,6 +3558,14 @@ final class MuesliController: NSObject {
         fputs("[muesli-native] toggle dictation stop\n", stderr)
         indicator.isToggleDictation = false
         handleStop()
+    }
+
+    func toggleVoiceNoteRecording() {
+        if dictationStartedAt != nil {
+            handleToggleStop()
+        } else if dictationState == .idle {
+            handleToggleStart(outputMode: .voiceNote)
+        }
     }
 
     private func handleStop() {
@@ -3497,6 +3614,7 @@ final class MuesliController: NSObject {
         // Standard path: stop recording → transcribe → paste
         guard let wavURL = recorder.stop() else {
             fputs("[muesli-native] stop without wav\n", stderr)
+            resetDictationOutputMode()
             setState(.idle)
             meetingMonitor.resumeAfterCooldown()
             return
@@ -3508,6 +3626,7 @@ final class MuesliController: NSObject {
             if isDictationTestMode {
                 dictationTestCallback?("")
             }
+            resetDictationOutputMode()
             setState(.idle)
             meetingMonitor.resumeAfterCooldown()
             return
@@ -3515,6 +3634,7 @@ final class MuesliController: NSObject {
 
         setState(.transcribing)
         let isTestMode = isDictationTestMode
+        let outputMode = currentDictationOutputMode
         let transcriptionBackend = isTestMode ? (dictationTestBackend ?? selectedBackend) : selectedBackend
         let transcriptionLanguage = isTestMode ? (dictationTestCohereLanguage ?? config.resolvedCohereLanguage) : config.resolvedCohereLanguage
         let task = Task { [weak self] in
@@ -3540,6 +3660,7 @@ final class MuesliController: NSObject {
                 if isTestMode {
                     await MainActor.run {
                         self.dictationTestCallback?(text)
+                        self.resetDictationOutputMode()
                         self.setState(.idle)
                         self.meetingMonitor.resumeAfterCooldown()
                     }
@@ -3551,6 +3672,7 @@ final class MuesliController: NSObject {
                 }
                 guard !text.isEmpty else {
                     await MainActor.run {
+                        self.resetDictationOutputMode()
                         self.setState(.idle)
                         self.meetingMonitor.resumeAfterCooldown()
                     }
@@ -3569,18 +3691,24 @@ final class MuesliController: NSObject {
                     self.statusBarController?.refresh()
                     self.historyWindowController?.reload()
                     self.syncAppState()
-                    PasteController.paste(text: text)
-                    SoundController.playDictationInsert(enabled: self.config.soundEnabled)
+                    if outputMode == .voiceNote {
+                        SoundController.playDictationInsert(enabled: self.config.soundEnabled)
+                    } else {
+                        PasteController.paste(text: text)
+                        SoundController.playDictationInsert(enabled: self.config.soundEnabled)
+                    }
+                    self.resetDictationOutputMode()
                     self.setState(.idle)
                     self.meetingMonitor.resumeAfterCooldown()
                     TelemetryDeck.signal("dictation.completed", parameters: [
                         "backend": self.selectedBackend.backend,
-                        "paste_method": "clipboard_restore",
+                        "paste_method": outputMode.pasteMethod,
                     ])
                 }
             } catch is CancellationError {
                 fputs("[muesli-native] test dictation cancelled\n", stderr)
                 await MainActor.run {
+                    self.resetDictationOutputMode()
                     self.setState(.idle)
                     self.meetingMonitor.resumeAfterCooldown()
                 }
@@ -3590,6 +3718,7 @@ final class MuesliController: NSObject {
                     if self.isDictationTestMode {
                         self.dictationTestFailureCallback?(self.userFacingDictationTestError(error))
                     }
+                    self.resetDictationOutputMode()
                     self.setState(.idle)
                     self.meetingMonitor.resumeAfterCooldown()
                 }

@@ -506,8 +506,8 @@ enum IndicatorAnchor: String, Codable, CaseIterable {
 }
 
 struct HotkeyConfig: Codable, Equatable {
-    var keyCode: UInt16 = 55
-    var label: String = "Left Cmd"
+    var keyCode: UInt16 = 61
+    var label: String = "Right Option"
 
     static func label(for keyCode: UInt16) -> String? {
         switch keyCode {
@@ -533,12 +533,21 @@ struct HotkeyConfig: Codable, Equatable {
 }
 
 enum OnboardingUseCase: String, Codable, CaseIterable {
+    case voiceNotes = "voice_notes"
     case dictation = "dictation"
     case meetings = "meetings"
     case dictationAndMeetings = "dictation_and_meetings"
 
     var includesDictation: Bool {
         self == .dictation || self == .dictationAndMeetings
+    }
+
+    var includesVoiceNotes: Bool {
+        self == .voiceNotes
+    }
+
+    var includesPushToTalk: Bool {
+        includesVoiceNotes || includesDictation
     }
 
     var includesMeetings: Bool {
