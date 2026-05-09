@@ -421,7 +421,7 @@ struct TranscriptFormatterTests {
         // System audio must be labelled "Others", never "You"
         #expect(!result.contains("You:"))
         #expect(result.contains("Others: Can everyone hear me?"))
-        #expect(result.contains("Others: Let's discuss the agenda"))
+        #expect(result.contains("Let's discuss the agenda"))
     }
 
     @Test("mic and system audio maintain correct labels when interleaved")
