@@ -47,12 +47,14 @@ enum PasteController {
 
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
+        let pasteChangeCount = pasteboard.changeCount
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
             simulatePaste()
 
             // Restore the original clipboard contents after the receiving app has consumed the paste.
             DispatchQueue.main.asyncAfter(deadline: .now() + clipboardRestoreDelay) {
+                guard pasteboard.changeCount == pasteChangeCount else { return }
                 restoreClipboard(pasteboard, from: savedItems)
             }
         }

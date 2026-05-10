@@ -141,6 +141,23 @@ struct PasteControllerTests {
         #expect(texts == ["item-one", "item-two"])
     }
 
+    @Test("stale paste restore does not overwrite newer clipboard contents")
+    func stalePasteRestoreDoesNotOverwriteNewerClipboardContents() async throws {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString("original", forType: .string)
+
+        PasteController.paste(text: "dictated text")
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        pasteboard.clearContents()
+        pasteboard.setString("user-copied-after-paste", forType: .string)
+
+        try await Task.sleep(nanoseconds: 700_000_000)
+
+        #expect(pasteboard.string(forType: .string) == "user-copied-after-paste")
+    }
+
     private func waitForClipboardString(expected: String?) async -> String? {
         await withCheckedContinuation { continuation in
             let deadline = Date().addingTimeInterval(clipboardRestoreTimeout)
