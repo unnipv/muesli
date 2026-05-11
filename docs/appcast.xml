@@ -10,14 +10,23 @@
             <pubDate>Mon, 11 May 2026 10:48:53 +0530</pubDate>
             <description><![CDATA[
 <h2>Muesli 0.6.7</h2>
-<p>Native macOS app — dictation + meeting transcription on Apple Silicon.</p>
-<h3>Install</h3>
+<p>This release focuses on more reliable meeting capture, safer updates, and smoother setup.</p>
+<h3>What's new</h3>
 <ul>
-<li>Download <code>Muesli-0.6.7.dmg</code></li>
-<li>Open the DMG and drag Muesli to Applications</li>
-<li>Launch from Applications</li>
+<li>System audio from Zoom, Microsoft Teams, and other call clients is now routed to the "Others" side of meeting transcripts instead of being mislabelled as you.</li>
+<li>Ollama is now available as a local meeting-summary backend, with improved timeout handling, title generation diagnostics, and Qwen 3.5 as the default Ollama model.</li>
+<li>Launch at Login is now wired through macOS login items, with better approval-state refresh in Settings.</li>
+<li>The onboarding flow is smoother for permission setup, meeting-only users, accessibility prompts, and model selection.</li>
+<li>Sparkle updates now show release notes and use the standard updater flow from the About screen, avoiding the previous busy-state loop.</li>
 </ul>
-<p>Signed, notarized, and stapled by Apple.</p>
+<h3>Fixes and polish</h3>
+<ul>
+<li>Computer Use alpha foundations are included, but the CUA hotkey is disabled by default so users do not accidentally trigger it before ChatGPT integration is configured.</li>
+<li>Paste handling is safer and avoids restoring stale clipboard contents over newer user clipboard changes.</li>
+<li>Custom dictionary phrase matching is more reliable.</li>
+<li>Meeting detection work has moved off the main thread to reduce UI stalls.</li>
+<li>CoreAudio recording cleanup is more robust across restart failures, teardown, and app deinitialization.</li>
+</ul>
 ]]></description>
             <sparkle:version>0.6.7</sparkle:version>
             <sparkle:shortVersionString>0.6.7</sparkle:shortVersionString>
