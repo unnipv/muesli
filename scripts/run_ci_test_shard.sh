@@ -69,6 +69,7 @@ case "${shard}" in
       MeetingResummarizationPolicyTests
       MeetingTemplateResolutionTests
       DisabledCalendarFilterTests
+      GoogleCalendarTests
     )
     ;;
   *)
