@@ -409,6 +409,12 @@ struct SettingsView: View {
                     }
                 }
                 Divider().background(MuesliTheme.surfaceBorder)
+                settingsRow("Mute system audio during dictation") {
+                    settingsSwitch(isOn: appState.config.muteSystemAudioDuringDictation) { newValue in
+                        controller.updateConfig { $0.muteSystemAudioDuringDictation = newValue }
+                    }
+                }
+                Divider().background(MuesliTheme.surfaceBorder)
                 screenContextRow("App context")
             }
         }

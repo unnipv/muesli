@@ -117,6 +117,7 @@ final class MuesliController: NSObject {
     private let hotkeyMonitor = HotkeyMonitor()
     private let computerUseHotkeyMonitor = HotkeyMonitor()
     private let recorder = MicrophoneRecorder()
+    private let audioDuckingController: AudioDuckingManaging
     private let indicator: FloatingIndicatorController
     private let calendarMonitor = CalendarMonitor()
     private let meetingMonitor = MeetingMonitor()
@@ -192,7 +193,8 @@ final class MuesliController: NSObject {
         runtime: RuntimePaths,
         dictationStore: DictationStore? = nil,
         meetingHookDispatcher: MeetingHookDispatching = MeetingHookRunner(),
-        launchAtLoginManager: LaunchAtLoginManaging = SystemLaunchAtLoginManager()
+        launchAtLoginManager: LaunchAtLoginManaging = SystemLaunchAtLoginManager(),
+        audioDuckingController: AudioDuckingManaging = AudioDuckingController()
     ) {
         let loadedConfig = configStore.load()
         self.runtime = runtime
@@ -201,6 +203,7 @@ final class MuesliController: NSObject {
         )
         self.meetingHookDispatcher = meetingHookDispatcher
         self.launchAtLoginCoordinator = LaunchAtLoginCoordinator(manager: launchAtLoginManager)
+        self.audioDuckingController = audioDuckingController
         self.config = loadedConfig
         if loadedConfig.recordingColorHex != "1e1e2e" {
             MuesliTheme.accentOverrideHex = loadedConfig.recordingColorHex
@@ -3946,11 +3949,15 @@ final class MuesliController: NSObject {
         fputs("[muesli-native] prepare\n", stderr)
         meetingMonitor.suppressWhileActive()
         meetingMonitor.refreshState()
+        if selectedBackend.backend != "nemotron" {
+            beginDictationAudioDucking()
+        }
         do {
             try recorder.prepare()
             setState(.preparing)
         } catch {
             fputs("[muesli-native] recorder prepare failed: \(error)\n", stderr)
+            restoreDictationAudioDucking()
             setState(.idle)
             meetingMonitor.resumeAfterCooldown()
             meetingMonitor.refreshState()
@@ -3971,12 +3978,25 @@ final class MuesliController: NSObject {
         appState.isVoiceNoteRecording = false
     }
 
+    private func beginDictationAudioDucking() {
+        audioDuckingController.beginDictationDucking(enabled: config.muteSystemAudioDuringDictation)
+    }
+
+    private func ensureDictationAudioDucked() {
+        audioDuckingController.ensureCurrentDefaultDucked()
+    }
+
+    private func restoreDictationAudioDucking() {
+        audioDuckingController.restoreDictationDucking()
+    }
+
     private func handleStart() {
         if isMeetingRecording() { return }
 
         // Nemotron is handsfree-only — block hold-to-talk and show a hint
         if selectedBackend.backend == "nemotron" {
             recorder.cancel()
+            restoreDictationAudioDucking()
             fputs("[muesli-native] hold-to-talk blocked for Nemotron, showing warning\n", stderr)
             indicator.showWarning("Double-tap for Nemotron handsfree mode", icon: "⚡")
             return
@@ -3987,6 +4007,7 @@ final class MuesliController: NSObject {
         beginDictationOutput()
 
         do {
+            ensureDictationAudioDucked()
             try recorder.start()
             dictationStartedAt = Date()
             capturedDictationContext = nil
@@ -4008,6 +4029,7 @@ final class MuesliController: NSObject {
             SoundController.playDictationStart(enabled: config.soundEnabled && !isDictationTestMode)
         } catch {
             fputs("[muesli-native] recorder start failed: \(error)\n", stderr)
+            restoreDictationAudioDucking()
             resetDictationOutputMode()
             setState(.idle)
             meetingMonitor.resumeAfterCooldown()
@@ -4059,6 +4081,7 @@ final class MuesliController: NSObject {
         }
 
         recorder.cancel()
+        restoreDictationAudioDucking()
         capturedDictationContext = nil
         dictationStartedAt = nil
         setState(.idle)
@@ -4069,6 +4092,7 @@ final class MuesliController: NSObject {
         if isMeetingRecording() { return }
         fputs("[muesli-native] toggle dictation start\n", stderr)
         meetingMonitor.suppressWhileActive()
+        beginDictationAudioDucking()
         beginDictationOutput(mode: outputMode)
 
         // Nemotron streaming: live text at cursor in handsfree mode too
@@ -4079,6 +4103,7 @@ final class MuesliController: NSObject {
                 dictationStartedAt = Date()
                 setState(.recording)
                 indicator.setToggleDictation(true, config: config)
+                ensureDictationAudioDucked()
                 fputs("[muesli-native] Nemotron streaming toggle mode active\n", stderr)
                 startNemotronStreamingAsync()
                 return
@@ -4087,6 +4112,7 @@ final class MuesliController: NSObject {
 
         do {
             try recorder.prepare()
+            ensureDictationAudioDucked()
             try recorder.start()
             dictationStartedAt = Date()
             capturedDictationContext = nil
@@ -4102,6 +4128,7 @@ final class MuesliController: NSObject {
             indicator.setToggleDictation(true, config: config)
         } catch {
             fputs("[muesli-native] toggle start failed: \(error)\n", stderr)
+            restoreDictationAudioDucking()
             resetDictationOutputMode()
             setState(.idle)
             meetingMonitor.resumeAfterCooldown()
@@ -4139,6 +4166,7 @@ final class MuesliController: NSObject {
             } else {
                 fputs("[muesli-native] Nemotron streaming stop, controller not ready (short press)\n", stderr)
             }
+            restoreDictationAudioDucking()
             _streamingDictationController = nil
             previousStreamText = ""
 
@@ -4168,7 +4196,9 @@ final class MuesliController: NSObject {
         }
 
         // Standard path: stop recording → transcribe → paste
-        guard let wavURL = recorder.stop() else {
+        let stoppedWavURL = recorder.stop()
+        restoreDictationAudioDucking()
+        guard let wavURL = stoppedWavURL else {
             fputs("[muesli-native] stop without wav\n", stderr)
             resetDictationOutputMode()
             setState(.idle)
