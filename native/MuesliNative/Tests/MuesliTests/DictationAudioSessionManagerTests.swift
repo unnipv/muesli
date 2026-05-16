@@ -85,6 +85,30 @@ struct DictationAudioSessionManagerTests {
         #expect(harness.recorder.activateCalls == 0)
     }
 
+    @Test("delayed route refresh does not block hotkey arm")
+    func delayedRouteRefreshDoesNotBlockHotkeyArm() {
+        let harness = Harness(routeKind: .headphoneLike, preferredInputDeviceID: 82)
+
+        harness.manager.refreshRoute(reason: "route-change", delay: 0.2, canWarmUp: true)
+        harness.manager.arm(source: "hotkey", duckingEnabled: false)
+        harness.wait()
+
+        #expect(harness.route.refreshCalls == 1)
+        #expect(harness.recorder.activateCalls == 1)
+        #expect(harness.recorder.warmUpCalls == 0)
+
+        Thread.sleep(forTimeInterval: 0.25)
+        harness.wait()
+
+        #expect(harness.recorder.warmUpCalls == 0)
+        #expect(harness.events.contains { event in
+            if case .latency(let name, _) = event {
+                return name == "route_refresh_cancelled:route-change"
+            }
+            return false
+        })
+    }
+
     @Test("recorder callbacks emit stream active, speech detected, and no audio timeout")
     func recorderCallbacksEmitAudioStateEvents() {
         let harness = Harness(routeKind: .speakerLike)

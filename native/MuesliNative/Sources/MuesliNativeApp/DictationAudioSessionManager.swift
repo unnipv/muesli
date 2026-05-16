@@ -70,6 +70,7 @@ final class DictationAudioSessionManager: @unchecked Sendable {
     private var routeSnapshot: RouteSnapshot
     private var duckingEnabledForSession = false
     private var externalSessionActive = false
+    private var routeRefreshGeneration = 0
 
     var onEvent: ((DictationAudioSessionEvent) -> Void)?
 
@@ -125,6 +126,7 @@ final class DictationAudioSessionManager: @unchecked Sendable {
         emit(.armed(sessionID, source: source))
         emitLatency("ui_armed")
         queue.async { [self] in
+            self.cancelPendingRouteRefreshLocked()
             guard self.isCurrent(sessionID) else { return }
             self.stateStorage = .armed(sessionID)
             self.routeSnapshot = self.makeRouteSnapshot()
@@ -146,6 +148,7 @@ final class DictationAudioSessionManager: @unchecked Sendable {
     func beginRecording(mode: String, duckingEnabled: Bool) {
         let sessionID = ensureSession()
         queue.async { [self] in
+            self.cancelPendingRouteRefreshLocked()
             guard self.isCurrent(sessionID) else { return }
             switch self.stateStorage {
             case .acquiringAudio, .streamActive, .speechDetected:
@@ -180,6 +183,7 @@ final class DictationAudioSessionManager: @unchecked Sendable {
 
     func beginExternalSession(source: String, duckingEnabled: Bool) {
         queue.async { [self] in
+            self.cancelPendingRouteRefreshLocked()
             self.externalSessionActive = true
             self.routeSnapshot = self.makeRouteSnapshot()
             self.emitLatency("external_begin:\(source)")
@@ -230,26 +234,15 @@ final class DictationAudioSessionManager: @unchecked Sendable {
     func refreshRoute(reason: String, delay: TimeInterval = 0, canWarmUp: Bool) {
         routingController.refreshRouteCache()
         queue.async { [self] in
-            if delay > 0 {
-                Thread.sleep(forTimeInterval: delay)
-            }
-            self.routeSnapshot = self.makeRouteSnapshot()
-            self.emitLatency("route_refresh:\(reason) \(self.routeSnapshot.debugDescription)")
-            guard self.stateStorage == .idle, !self.externalSessionActive else { return }
-            guard canWarmUp else {
-                self.recorder.keepsAudioGraphWarm = false
-                self.recorder.coolDown()
+            self.routeRefreshGeneration += 1
+            let generation = self.routeRefreshGeneration
+            guard delay > 0 else {
+                self.performRouteRefreshLocked(reason: reason, canWarmUp: canWarmUp, generation: generation)
                 return
             }
-            self.recorder.keepsAudioGraphWarm = true
-            do {
-                self.emitLatency("engine_prepare_begin:warmup:\(reason)")
-                try self.recorder.warmUp(preferredInputDeviceID: self.routeSnapshot.preferredInputDeviceID)
-                self.emitLatency("engine_prepare_end:warmup:\(reason)")
-                fputs("[dictation-session] warmed reason=\(reason) \(self.routeSnapshot.debugDescription)\n", stderr)
-            } catch {
-                self.emitLatency("engine_prepare_failed:warmup:\(reason)")
-                fputs("[dictation-session] warmup failed reason=\(reason) error=\(error)\n", stderr)
+            self.emitLatency("route_refresh_deferred:\(reason)")
+            self.queue.asyncAfter(deadline: .now() + delay) { [self] in
+                self.performRouteRefreshLocked(reason: reason, canWarmUp: canWarmUp, generation: generation)
             }
         }
     }
@@ -276,6 +269,35 @@ final class DictationAudioSessionManager: @unchecked Sendable {
 
     private func isCurrent(_ sessionID: UUID) -> Bool {
         stateStorage.sessionID == sessionID
+    }
+
+    private func cancelPendingRouteRefreshLocked() {
+        routeRefreshGeneration += 1
+    }
+
+    private func performRouteRefreshLocked(reason: String, canWarmUp: Bool, generation: Int) {
+        guard routeRefreshGeneration == generation else {
+            emitLatency("route_refresh_cancelled:\(reason)")
+            return
+        }
+        routeSnapshot = makeRouteSnapshot()
+        emitLatency("route_refresh:\(reason) \(routeSnapshot.debugDescription)")
+        guard stateStorage == .idle, !externalSessionActive else { return }
+        guard canWarmUp else {
+            recorder.keepsAudioGraphWarm = false
+            recorder.coolDown()
+            return
+        }
+        recorder.keepsAudioGraphWarm = true
+        do {
+            emitLatency("engine_prepare_begin:warmup:\(reason)")
+            try recorder.warmUp(preferredInputDeviceID: routeSnapshot.preferredInputDeviceID)
+            emitLatency("engine_prepare_end:warmup:\(reason)")
+            fputs("[dictation-session] warmed reason=\(reason) \(routeSnapshot.debugDescription)\n", stderr)
+        } catch {
+            emitLatency("engine_prepare_failed:warmup:\(reason)")
+            fputs("[dictation-session] warmup failed reason=\(reason) error=\(error)\n", stderr)
+        }
     }
 
     private func beginDuckingIfNeeded(duckingEnabled: Bool) {

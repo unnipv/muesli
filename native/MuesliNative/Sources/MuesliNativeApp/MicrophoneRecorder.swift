@@ -160,8 +160,8 @@ final class MicrophoneRecorder: @unchecked Sendable {
         try prepare()
 
         do {
+            try ensurePreparedGraphLocked(preferredInputDeviceID: preferredInputDeviceID)
             if !engine.isRunning {
-                try ensurePreparedGraphLocked(preferredInputDeviceID: preferredInputDeviceID)
                 lock.withLock { state in
                     state.isCapturing = true
                     state.isPaused = false

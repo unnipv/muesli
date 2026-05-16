@@ -10,6 +10,8 @@ import os
 /// serially rather than spawning overlapping Tasks that race the same state.
 final class StreamingVadController: @unchecked Sendable {
     /// Called when VAD detects a natural chunk boundary.
+    /// Delivery is not main-thread guaranteed; handlers must dispatch before
+    /// touching queue- or actor-isolated state.
     var onChunkBoundary: (() -> Void)?
 
     private struct State {
