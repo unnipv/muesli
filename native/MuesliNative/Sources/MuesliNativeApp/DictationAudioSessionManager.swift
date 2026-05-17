@@ -371,9 +371,9 @@ final class DictationAudioSessionManager: @unchecked Sendable {
     private func restoreSessionAudioState(completion: (() -> Void)? = nil) {
         duckingController.restoreDictationDucking { [self] in
             self.mediaPlaybackController.restoreDictationMediaPause()
-            self.routingController.refreshRouteAfterDictationSession()
             completion?()
         }
+        routingController.refreshRouteAfterDictationSession()
         duckingEnabledForSession = false
     }
 

@@ -25,6 +25,7 @@ final class StreamingMicRecorder: StreamingDictationRecording {
     private let engine = AVAudioEngine()
     private let lock = OSAllocatedUnfairLock(initialState: FileState())
     private var isRunning = false
+    private var tapInstalled = false
 
     private struct FileState {
         var fileHandle: FileHandle?
@@ -148,12 +149,13 @@ final class StreamingMicRecorder: StreamingDictationRecording {
             let floats = Array(UnsafeBufferPointer(start: floatData, count: frameCount))
             self.onAudioBuffer?(floats)
         }
+        tapInstalled = true
 
         do {
             try engine.start()
             isRunning = true
         } catch {
-            inputNode.removeTap(onBus: 0)
+            removeTapIfNeeded()
             engine.stop()
             let state = lock.withLock { state -> FileState in
                 let old = state
@@ -193,7 +195,7 @@ final class StreamingMicRecorder: StreamingDictationRecording {
         guard isRunning else { return nil }
         isRunning = false
 
-        engine.inputNode.removeTap(onBus: 0)
+        removeTapIfNeeded()
         engine.stop()
 
         let finalState = lock.withLock { state -> FileState in
@@ -222,7 +224,7 @@ final class StreamingMicRecorder: StreamingDictationRecording {
 
     func cancel() {
         isRunning = false
-        engine.inputNode.removeTap(onBus: 0)
+        removeTapIfNeeded()
         engine.stop()
         onAudioBuffer = nil
         onPCMSamples = nil
@@ -240,6 +242,12 @@ final class StreamingMicRecorder: StreamingDictationRecording {
     /// Approximate current power level (dB) from recent samples.
     func currentPower() -> Float {
         lock.withLock { $0.latestPowerDB }
+    }
+
+    private func removeTapIfNeeded() {
+        guard tapInstalled else { return }
+        engine.inputNode.removeTap(onBus: 0)
+        tapInstalled = false
     }
 
     // MARK: - File Management

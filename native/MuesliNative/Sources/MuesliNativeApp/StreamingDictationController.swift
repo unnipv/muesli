@@ -434,8 +434,9 @@ final class StreamingDictationController {
         let initialized = await withCheckedContinuation { continuation in
             let gate = OneShotBoolContinuation(continuation)
 
-            Task {
+            Task { [weak self] in
                 await task.value
+                guard self != nil else { return }
                 gate.resume(true)
             }
             Task {

@@ -299,7 +299,7 @@ final class DictationAudioRouteController: DictationAudioRouting {
     private func installDefaultInputListener() {
         var address = Self.defaultInputDeviceAddress()
         let listener: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
-            self?.refreshRouteCache(notifyEvenIfPreferredUnchanged: true)
+            self?.refreshRouteCache()
         }
         let status = AudioObjectAddPropertyListenerBlock(
             AudioObjectID(kAudioObjectSystemObject),

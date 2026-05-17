@@ -222,7 +222,7 @@ struct DictationAudioSessionManagerTests {
 
         #expect(harness.ducking.restoreCalls == 1)
         #expect(harness.media.restoreCalls == 0)
-        #expect(harness.route.restoreCalls == 0)
+        #expect(harness.route.restoreCalls == 1)
         #expect(!harness.events.contains { event in
             if case .audioRestored = event {
                 return true

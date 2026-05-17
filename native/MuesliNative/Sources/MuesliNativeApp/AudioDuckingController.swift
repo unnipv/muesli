@@ -340,6 +340,8 @@ final class CoreAudioDuckingDeviceClient: AudioDuckingDeviceClient {
         deviceID: AudioObjectID,
         scope: AudioObjectPropertyScope
     ) -> [AudioObjectPropertyElement] {
+        // Dictation ducking only needs the main and common stereo elements.
+        // Aggregate/surround channel-specific ducking is intentionally out of scope.
         let candidates = [
             kAudioObjectPropertyElementMain,
             AudioObjectPropertyElement(1),
