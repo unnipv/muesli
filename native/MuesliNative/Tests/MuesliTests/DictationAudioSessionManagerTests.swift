@@ -18,6 +18,22 @@ struct DictationAudioSessionManagerTests {
         #expect(harness.ducking.beginCalls == [true])
     }
 
+    @Test("arm does not block caller while route warmup is in flight")
+    func armDoesNotBlockCallerWhileRouteWarmupIsInFlight() {
+        let harness = Harness(routeKind: .speakerLike)
+        harness.recorder.warmUpDelay = 0.2
+
+        harness.manager.refreshRoute(reason: "route-change", canWarmUp: true)
+        let startedAt = Date()
+        harness.manager.arm(source: "hotkey", duckingEnabled: true)
+        let elapsed = Date().timeIntervalSince(startedAt)
+        harness.wait()
+
+        #expect(elapsed < 0.05)
+        #expect(harness.recorder.warmUpCalls == 1)
+        #expect(harness.recorder.activateCalls == 1)
+    }
+
     @Test("begin recording starts capture and reuses duplicate activation")
     func beginRecordingReusesDuplicateActivation() {
         let harness = Harness(routeKind: .speakerLike)
@@ -220,6 +236,7 @@ private final class FakeDictationRecorder: DictationAudioRecording {
     var cancelCalls = 0
     var stopURL: URL?
     var lastWarmInputDeviceID: AudioObjectID?
+    var warmUpDelay: TimeInterval = 0
 
     func prepare() throws {
         prepareCalls += 1
@@ -227,6 +244,9 @@ private final class FakeDictationRecorder: DictationAudioRecording {
 
     func warmUp(preferredInputDeviceID: AudioObjectID?) throws {
         warmUpCalls += 1
+        if warmUpDelay > 0 {
+            Thread.sleep(forTimeInterval: warmUpDelay)
+        }
         lastWarmInputDeviceID = preferredInputDeviceID
     }
 

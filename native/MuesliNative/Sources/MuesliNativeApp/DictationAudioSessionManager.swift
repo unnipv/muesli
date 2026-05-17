@@ -71,6 +71,9 @@ final class DictationAudioSessionManager: @unchecked Sendable {
     private var duckingEnabledForSession = false
     private var externalSessionActive = false
     private var routeRefreshGeneration = 0
+    private let sessionHintLock = NSLock()
+    private var sessionHint: UUID?
+    private var externalSessionHint = false
 
     var onEvent: ((DictationAudioSessionEvent) -> Void)?
 
@@ -108,13 +111,11 @@ final class DictationAudioSessionManager: @unchecked Sendable {
     }
 
     var currentSessionID: UUID? {
-        currentState.sessionID
+        sessionHintLock.withLock { sessionHint }
     }
 
     var hasActiveSession: Bool {
-        queue.sync {
-            stateStorage.sessionID != nil || externalSessionActive
-        }
+        sessionHintLock.withLock { sessionHint != nil || externalSessionHint }
     }
 
     func currentPower() -> Float {
@@ -127,6 +128,7 @@ final class DictationAudioSessionManager: @unchecked Sendable {
         emitLatency("ui_armed")
         queue.async { [self] in
             self.cancelPendingRouteRefreshLocked()
+            self.ensureSessionStateLocked(sessionID)
             guard self.isCurrent(sessionID) else { return }
             self.stateStorage = .armed(sessionID)
             self.routeSnapshot = self.makeRouteSnapshot(refreshInput: true)
@@ -149,6 +151,7 @@ final class DictationAudioSessionManager: @unchecked Sendable {
         let sessionID = ensureSession()
         queue.async { [self] in
             self.cancelPendingRouteRefreshLocked()
+            self.ensureSessionStateLocked(sessionID)
             guard self.isCurrent(sessionID) else { return }
             switch self.stateStorage {
             case .acquiringAudio, .streamActive, .speechDetected:
@@ -182,6 +185,7 @@ final class DictationAudioSessionManager: @unchecked Sendable {
     }
 
     func beginExternalSession(source: String, duckingEnabled: Bool) {
+        setExternalSessionHint(true)
         queue.async { [self] in
             self.cancelPendingRouteRefreshLocked()
             self.externalSessionActive = true
@@ -193,6 +197,7 @@ final class DictationAudioSessionManager: @unchecked Sendable {
     }
 
     func endExternalSession(reason: String) {
+        setExternalSessionHint(false)
         queue.async { [self] in
             guard self.externalSessionActive else { return }
             self.externalSessionActive = false
@@ -213,6 +218,7 @@ final class DictationAudioSessionManager: @unchecked Sendable {
             let wavURL = self.recorder.stop()
             self.recorder.preferredInputDeviceID = nil
             self.stateStorage = .idle
+            self.clearSessionHint(sessionID)
             self.restoreSessionAudioState()
             self.emit(.stopped(sessionID, wavURL: wavURL))
         }
@@ -225,6 +231,8 @@ final class DictationAudioSessionManager: @unchecked Sendable {
             self.recorder.preferredInputDeviceID = nil
             self.stateStorage = .idle
             self.externalSessionActive = false
+            self.clearSessionHint(sessionID)
+            self.setExternalSessionHint(false)
             self.restoreSessionAudioState()
             self.emitLatency("cancelled:\(reason)")
             self.emit(.cancelled(sessionID, reason: reason))
@@ -257,13 +265,32 @@ final class DictationAudioSessionManager: @unchecked Sendable {
     }
 
     private func ensureSession() -> UUID {
-        queue.sync {
-            if let current = stateStorage.sessionID {
+        sessionHintLock.withLock {
+            if let current = sessionHint {
                 return current
             }
             let id = UUID()
-            stateStorage = .armed(id)
+            sessionHint = id
             return id
+        }
+    }
+
+    private func ensureSessionStateLocked(_ sessionID: UUID) {
+        if stateStorage.sessionID == nil {
+            stateStorage = .armed(sessionID)
+        }
+    }
+
+    private func clearSessionHint(_ sessionID: UUID?) {
+        sessionHintLock.withLock {
+            guard self.sessionHint == sessionID || sessionID == nil else { return }
+            self.sessionHint = nil
+        }
+    }
+
+    private func setExternalSessionHint(_ active: Bool) {
+        sessionHintLock.withLock {
+            externalSessionHint = active
         }
     }
 
@@ -327,6 +354,7 @@ final class DictationAudioSessionManager: @unchecked Sendable {
         let sessionID = stateStorage.sessionID
         stateStorage = .idle
         recorder.preferredInputDeviceID = nil
+        clearSessionHint(sessionID)
         restoreSessionAudioState()
         emit(.failed(sessionID, error: error))
     }

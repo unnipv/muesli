@@ -23,19 +23,22 @@ struct AudioOutputDeviceDescription: Equatable {
     let hasOutputStreams: Bool
     let hasInputStreams: Bool
     let outputTerminalTypes: Set<UInt32>
+    let outputDataSourceKinds: Set<UInt32>
 
     init(
         name: String?,
         transportType: UInt32?,
         hasOutputStreams: Bool,
         hasInputStreams: Bool,
-        outputTerminalTypes: Set<UInt32> = []
+        outputTerminalTypes: Set<UInt32> = [],
+        outputDataSourceKinds: Set<UInt32> = []
     ) {
         self.name = name
         self.transportType = transportType
         self.hasOutputStreams = hasOutputStreams
         self.hasInputStreams = hasInputStreams
         self.outputTerminalTypes = outputTerminalTypes
+        self.outputDataSourceKinds = outputDataSourceKinds
     }
 }
 
@@ -43,10 +46,11 @@ enum AudioRouteClassifier {
     static func outputRouteKind(for device: AudioOutputDeviceDescription) -> AudioOutputRouteKind {
         guard device.hasOutputStreams else { return .unknown }
 
-        if !device.outputTerminalTypes.isDisjoint(with: speakerTerminalTypes) {
+        let routeKinds = device.outputTerminalTypes.union(device.outputDataSourceKinds)
+        if !routeKinds.isDisjoint(with: speakerTerminalTypes) {
             return .speakerLike
         }
-        if device.outputTerminalTypes.contains(kAudioStreamTerminalTypeHeadphones) {
+        if routeKinds.contains(kAudioStreamTerminalTypeHeadphones) {
             return .headphoneLike
         }
 
@@ -57,12 +61,6 @@ enum AudioRouteClassifier {
             return device.hasInputStreams ? .headphoneLike : .speakerLike
         }
 
-        if let transportType = device.transportType,
-           inputCapableWiredTransports.contains(transportType),
-           device.hasInputStreams {
-            return .headphoneLike
-        }
-
         return .speakerLike
     }
 
@@ -70,11 +68,6 @@ enum AudioRouteClassifier {
         kAudioStreamTerminalTypeSpeaker,
         kAudioStreamTerminalTypeLFESpeaker,
         kAudioStreamTerminalTypeReceiverSpeaker,
-    ]
-
-    private static let inputCapableWiredTransports: Set<UInt32> = [
-        kAudioDeviceTransportTypeUSB,
-        kAudioDeviceTransportTypeThunderbolt,
     ]
 }
 
@@ -350,7 +343,8 @@ final class CoreAudioDeviceInspector: CoreAudioDeviceInspecting {
                 transportType: transportType(for: deviceID),
                 hasOutputStreams: hasStreams(deviceID: deviceID, scope: kAudioDevicePropertyScopeOutput),
                 hasInputStreams: hasStreams(deviceID: deviceID, scope: kAudioDevicePropertyScopeInput),
-                outputTerminalTypes: outputTerminalTypes(for: deviceID)
+                outputTerminalTypes: outputTerminalTypes(for: deviceID),
+                outputDataSourceKinds: outputDataSourceKinds(for: deviceID)
             )
         )
     }
@@ -464,6 +458,13 @@ final class CoreAudioDeviceInspector: CoreAudioDeviceInspecting {
         )
     }
 
+    private func outputDataSourceKinds(for deviceID: AudioObjectID) -> Set<UInt32> {
+        Set(
+            currentDataSourceIDs(deviceID: deviceID, scope: kAudioDevicePropertyScopeOutput)
+                .compactMap { sourceID in dataSourceKind(for: sourceID, deviceID: deviceID, scope: kAudioDevicePropertyScopeOutput) }
+        )
+    }
+
     private func streamIDs(deviceID: AudioObjectID, scope: AudioObjectPropertyScope) -> [AudioObjectID] {
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioDevicePropertyStreams,
@@ -495,6 +496,58 @@ final class CoreAudioDeviceInspector: CoreAudioDeviceInspecting {
             return nil
         }
         return terminalType
+    }
+
+    private func currentDataSourceIDs(deviceID: AudioObjectID, scope: AudioObjectPropertyScope) -> [UInt32] {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyDataSource,
+            mScope: scope,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var dataSize: UInt32 = 0
+        guard AudioObjectGetPropertyDataSize(deviceID, &address, 0, nil, &dataSize) == noErr,
+              dataSize >= MemoryLayout<UInt32>.size else {
+            return []
+        }
+        let count = Int(dataSize) / MemoryLayout<UInt32>.size
+        var ids = [UInt32](repeating: 0, count: count)
+        guard AudioObjectGetPropertyData(deviceID, &address, 0, nil, &dataSize, &ids) == noErr else {
+            return []
+        }
+        return ids
+    }
+
+    private func dataSourceKind(
+        for sourceID: UInt32,
+        deviceID: AudioObjectID,
+        scope: AudioObjectPropertyScope
+    ) -> UInt32? {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyDataSourceKindForID,
+            mScope: scope,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var source = sourceID
+        var kind = UInt32(0)
+        let sourceSize = UInt32(MemoryLayout<UInt32>.size)
+        let kindSize = UInt32(MemoryLayout<UInt32>.size)
+        var result: UInt32?
+        withUnsafeMutablePointer(to: &source) { sourcePointer in
+            withUnsafeMutablePointer(to: &kind) { kindPointer in
+                var translation = AudioValueTranslation(
+                    mInputData: sourcePointer,
+                    mInputDataSize: sourceSize,
+                    mOutputData: kindPointer,
+                    mOutputDataSize: kindSize
+                )
+                var dataSize = UInt32(MemoryLayout<AudioValueTranslation>.size)
+                guard AudioObjectGetPropertyData(deviceID, &address, 0, nil, &dataSize, &translation) == noErr else {
+                    return
+                }
+                result = kindPointer.pointee
+            }
+        }
+        return result
     }
 
     private func hasProperty(
