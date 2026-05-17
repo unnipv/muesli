@@ -4216,8 +4216,6 @@ final class MuesliController: NSObject {
             }
             guard dictationAudioSessionManager.currentSessionID == nil else {
                 fputs("[muesli-native] ignoring stopped event while a new session is active\n", stderr)
-                pendingDictationStopSessionID = nil
-                pendingDictationStopStartedAt = nil
                 if let wavURL {
                     try? FileManager.default.removeItem(at: wavURL)
                 }
@@ -4490,6 +4488,7 @@ final class MuesliController: NSObject {
                     source: "nemotron-toggle",
                     duckingEnabled: config.muteSystemAudioDuringDictation
                 )
+                meetingMonitor.refreshState()
                 fputs("[muesli-native] Nemotron streaming toggle mode active\n", stderr)
                 startNemotronStreamingAsync(
                     sessionID: sessionID

@@ -240,8 +240,8 @@ struct AudioDuckingControllerTests {
         #expect(client.muteValues[.init(1, kAudioObjectPropertyElementMain)] == false)
     }
 
-    @Test("rapid second dictation re-ducks after restore stabilization")
-    func rapidSecondDictationReducksAfterRestoreStabilization() {
+    @Test("rapid second dictation drains cancelled restore completions")
+    func rapidSecondDictationDrainsCancelledRestoreCompletions() {
         let client = FakeAudioDuckingDeviceClient()
         client.activityStatus = .active
         client.defaultDeviceID = 1
@@ -268,7 +268,7 @@ struct AudioDuckingControllerTests {
         Thread.sleep(forTimeInterval: 0.07)
         controller.waitForIdle()
 
-        #expect(restoreCompletionCount == 0)
+        #expect(restoreCompletionCount == 1)
         #expect(client.muteValues[.init(1, kAudioObjectPropertyElementMain)] == true)
         #expect(client.muteSetCalls == [
             .init(deviceID: 1, element: kAudioObjectPropertyElementMain, value: true),

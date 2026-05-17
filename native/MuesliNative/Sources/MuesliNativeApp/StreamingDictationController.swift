@@ -41,6 +41,28 @@ private final class NemotronStreamingTranscriberAdapter: NemotronStreamingTransc
 }
 
 @available(macOS 15, *)
+private final class OneShotBoolContinuation: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Bool, Never>?
+    private var didResume = false
+
+    init(_ continuation: CheckedContinuation<Bool, Never>) {
+        self.continuation = continuation
+    }
+
+    func resume(_ value: Bool) {
+        let continuationToResume = lock.withLock { () -> CheckedContinuation<Bool, Never>? in
+            guard !didResume else { return nil }
+            didResume = true
+            let continuation = self.continuation
+            self.continuation = nil
+            return continuation
+        }
+        continuationToResume?.resume(returning: value)
+    }
+}
+
+@available(macOS 15, *)
 final class StreamingDictationController {
     private enum DrainResult {
         case finished
@@ -228,13 +250,18 @@ final class StreamingDictationController {
         startDrainIfNeeded(sessionID: sessionID)
         let initializationTask = streamStateTask
         Task {
-            await self.waitForStreamStateInitialization(
+            let streamStateReady = await self.waitForStreamStateInitialization(
                 initializationTask,
                 sessionID: sessionID,
                 timeout: Self.stopStreamStateTimeout
             )
             guard self.isCurrentSession(sessionID) else {
                 self.completeStop(sessionID: sessionID, with: self.fullTranscript)
+                return
+            }
+            guard streamStateReady || self.streamState != nil else {
+                let transcript = self.finishStoppedSession(sessionID: sessionID)
+                self.completeStop(sessionID: sessionID, with: transcript)
                 return
             }
             self.startDrainIfNeeded(sessionID: sessionID)
@@ -380,22 +407,25 @@ final class StreamingDictationController {
         _ task: Task<Void, Never>?,
         sessionID: UUID,
         timeout: TimeInterval
-    ) async {
-        guard let task else { return }
-        await withTaskGroup(of: Void.self) { group in
-            group.addTask {
+    ) async -> Bool {
+        guard let task else { return true }
+        let initialized = await withCheckedContinuation { continuation in
+            let gate = OneShotBoolContinuation(continuation)
+
+            Task {
                 await task.value
+                gate.resume(true)
             }
-            group.addTask {
+            Task {
                 try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
                 task.cancel()
+                gate.resume(false)
             }
-            await group.next()
-            group.cancelAll()
         }
-        if isCurrentSession(sessionID), streamState == nil {
+        if !initialized, isCurrentSession(sessionID), streamState == nil {
             fputs("[streaming-dictation] stream state init timed out during stop\n", stderr)
         }
+        return initialized
     }
 
     private func finishStoppedSession(sessionID: UUID) -> String {

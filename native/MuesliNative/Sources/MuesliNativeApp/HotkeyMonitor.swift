@@ -102,6 +102,7 @@ final class HotkeyMonitor {
     }
 
     func stop() {
+        finishActiveSessionBeforeReconfigure()
         cancelTimers()
         if let globalMonitor {
             NSEvent.removeMonitor(globalMonitor)

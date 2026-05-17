@@ -283,6 +283,28 @@ struct StreamingDictationControllerTests {
         #expect(text.isEmpty)
         #expect(elapsed < 2.5)
     }
+
+    @available(macOS 15, *)
+    @Test("stop completes when stream state initialization ignores cancellation")
+    func stopCompletesWhenStreamStateInitializationIgnoresCancellation() async {
+        let transcriber = CancellationIgnoringNemotronStreamingTranscriber()
+        let recorder = InspectableStreamingDictationRecorder()
+        let controller = StreamingDictationController(
+            transcriber: transcriber,
+            recorder: recorder
+        )
+
+        #expect(controller.start() == true)
+        recorder.emit(samples: [Float](repeating: 0.2, count: 8960))
+
+        let startedAt = Date()
+        let text = await stop(controller)
+        let elapsed = Date().timeIntervalSince(startedAt)
+        await transcriber.releaseState()
+
+        #expect(text.isEmpty)
+        #expect(elapsed < 2.5)
+    }
 }
 
 private final class FailingStreamingDictationRecorder: StreamingDictationRecording {
@@ -417,6 +439,36 @@ private final class HangingNemotronStreamingTranscriber: NemotronStreamingTransc
         while true {
             try Task.checkCancellation()
             try await Task.sleep(for: .milliseconds(100))
+        }
+    }
+
+    func transcribeChunk(
+        samples: [Float],
+        state: inout NemotronStreamingTranscriber.StreamState
+    ) async throws -> String {
+        "should not be reached"
+    }
+}
+
+@available(macOS 15, *)
+private actor CancellationIgnoringNemotronStreamingTranscriber: NemotronStreamingTranscribing {
+    private var continuation: CheckedContinuation<Void, Never>?
+    private var released = false
+
+    func makeStreamState() async throws -> NemotronStreamingTranscriber.StreamState {
+        if !released {
+            await withCheckedContinuation { continuation in
+                self.continuation = continuation
+            }
+        }
+        return try await NemotronStreamingTranscriber().makeStreamState()
+    }
+
+    func releaseState() {
+        released = true
+        if let continuation {
+            self.continuation = nil
+            continuation.resume()
         }
     }
 
