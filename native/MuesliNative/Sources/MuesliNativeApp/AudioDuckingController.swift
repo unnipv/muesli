@@ -176,9 +176,7 @@ final class AudioDuckingController: AudioDuckingManaging {
         guard isRestorePending else { return }
         restoreGeneration += 1
         isRestorePending = false
-        let completions = restoreCompletions
-        restoreCompletions.removeAll()
-        completions.forEach { $0() }
+        // Preserve completions until a real restore happens; a new dictation keeps output ducked.
     }
 
     private func scheduleRestoreAfterCodecStabilizationLocked(generation: Int, deadline: Date) {
