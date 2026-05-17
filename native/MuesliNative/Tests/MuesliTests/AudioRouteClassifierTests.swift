@@ -67,7 +67,53 @@ struct AudioRouteClassifierTests {
                 name: "MacBook Pro Speakers",
                 transportType: kAudioDeviceTransportTypeBuiltIn,
                 hasOutputStreams: true,
-                hasInputStreams: false
+                hasInputStreams: false,
+                outputTerminalTypes: [kAudioStreamTerminalTypeSpeaker]
+            )
+        )
+
+        #expect(route == .speakerLike)
+    }
+
+    @Test("wired headphones are headphone-like by terminal type")
+    func wiredHeadphonesAreHeadphoneLikeByTerminalType() {
+        let route = AudioRouteClassifier.outputRouteKind(
+            for: AudioOutputDeviceDescription(
+                name: "External Output",
+                transportType: kAudioDeviceTransportTypeBuiltIn,
+                hasOutputStreams: true,
+                hasInputStreams: false,
+                outputTerminalTypes: [kAudioStreamTerminalTypeHeadphones]
+            )
+        )
+
+        #expect(route == .headphoneLike)
+    }
+
+    @Test("USB headphones are headphone-like by terminal type")
+    func usbHeadphonesAreHeadphoneLikeByTerminalType() {
+        let route = AudioRouteClassifier.outputRouteKind(
+            for: AudioOutputDeviceDescription(
+                name: "USB Output",
+                transportType: kAudioDeviceTransportTypeUSB,
+                hasOutputStreams: true,
+                hasInputStreams: false,
+                outputTerminalTypes: [kAudioStreamTerminalTypeHeadphones]
+            )
+        )
+
+        #expect(route == .headphoneLike)
+    }
+
+    @Test("USB speakers are speaker-like by terminal type")
+    func usbSpeakersAreSpeakerLikeByTerminalType() {
+        let route = AudioRouteClassifier.outputRouteKind(
+            for: AudioOutputDeviceDescription(
+                name: "USB Output",
+                transportType: kAudioDeviceTransportTypeUSB,
+                hasOutputStreams: true,
+                hasInputStreams: false,
+                outputTerminalTypes: [kAudioStreamTerminalTypeSpeaker]
             )
         )
 
@@ -81,7 +127,8 @@ struct AudioRouteClassifierTests {
                 name: "External Headphones",
                 transportType: kAudioDeviceTransportTypeBuiltIn,
                 hasOutputStreams: true,
-                hasInputStreams: false
+                hasInputStreams: false,
+                outputTerminalTypes: [kAudioStreamTerminalTypeSpeaker]
             )
         )
 

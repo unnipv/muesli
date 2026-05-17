@@ -22,11 +22,33 @@ struct AudioOutputDeviceDescription: Equatable {
     let transportType: UInt32?
     let hasOutputStreams: Bool
     let hasInputStreams: Bool
+    let outputTerminalTypes: Set<UInt32>
+
+    init(
+        name: String?,
+        transportType: UInt32?,
+        hasOutputStreams: Bool,
+        hasInputStreams: Bool,
+        outputTerminalTypes: Set<UInt32> = []
+    ) {
+        self.name = name
+        self.transportType = transportType
+        self.hasOutputStreams = hasOutputStreams
+        self.hasInputStreams = hasInputStreams
+        self.outputTerminalTypes = outputTerminalTypes
+    }
 }
 
 enum AudioRouteClassifier {
     static func outputRouteKind(for device: AudioOutputDeviceDescription) -> AudioOutputRouteKind {
         guard device.hasOutputStreams else { return .unknown }
+
+        if device.outputTerminalTypes.contains(kAudioStreamTerminalTypeHeadphones) {
+            return .headphoneLike
+        }
+        if !device.outputTerminalTypes.isDisjoint(with: speakerTerminalTypes) {
+            return .speakerLike
+        }
 
         if device.transportType == kAudioDeviceTransportTypeBluetooth
             || device.transportType == kAudioDeviceTransportTypeBluetoothLE {
@@ -37,6 +59,12 @@ enum AudioRouteClassifier {
 
         return .speakerLike
     }
+
+    private static let speakerTerminalTypes: Set<UInt32> = [
+        kAudioStreamTerminalTypeSpeaker,
+        kAudioStreamTerminalTypeLFESpeaker,
+        kAudioStreamTerminalTypeReceiverSpeaker,
+    ]
 }
 
 protocol DictationAudioRouting: AnyObject {
@@ -310,7 +338,8 @@ final class CoreAudioDeviceInspector: CoreAudioDeviceInspecting {
                 name: deviceName(for: deviceID),
                 transportType: transportType(for: deviceID),
                 hasOutputStreams: hasStreams(deviceID: deviceID, scope: kAudioDevicePropertyScopeOutput),
-                hasInputStreams: hasStreams(deviceID: deviceID, scope: kAudioDevicePropertyScopeInput)
+                hasInputStreams: hasStreams(deviceID: deviceID, scope: kAudioDevicePropertyScopeInput),
+                outputTerminalTypes: outputTerminalTypes(for: deviceID)
             )
         )
     }
@@ -414,14 +443,47 @@ final class CoreAudioDeviceInspector: CoreAudioDeviceInspecting {
     }
 
     private func hasStreams(deviceID: AudioObjectID, scope: AudioObjectPropertyScope) -> Bool {
+        !streamIDs(deviceID: deviceID, scope: scope).isEmpty
+    }
+
+    private func outputTerminalTypes(for deviceID: AudioObjectID) -> Set<UInt32> {
+        Set(
+            streamIDs(deviceID: deviceID, scope: kAudioDevicePropertyScopeOutput)
+                .compactMap { streamID in terminalType(for: streamID) }
+        )
+    }
+
+    private func streamIDs(deviceID: AudioObjectID, scope: AudioObjectPropertyScope) -> [AudioObjectID] {
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioDevicePropertyStreams,
             mScope: scope,
             mElement: kAudioObjectPropertyElementMain
         )
         var dataSize: UInt32 = 0
-        return AudioObjectGetPropertyDataSize(deviceID, &address, 0, nil, &dataSize) == noErr
-            && dataSize >= MemoryLayout<AudioObjectID>.size
+        guard AudioObjectGetPropertyDataSize(deviceID, &address, 0, nil, &dataSize) == noErr,
+              dataSize >= MemoryLayout<AudioObjectID>.size else {
+            return []
+        }
+        let count = Int(dataSize) / MemoryLayout<AudioObjectID>.size
+        var ids = [AudioObjectID](repeating: AudioObjectID(kAudioObjectUnknown), count: count)
+        guard AudioObjectGetPropertyData(deviceID, &address, 0, nil, &dataSize, &ids) == noErr else {
+            return []
+        }
+        return ids.filter { $0 != AudioObjectID(kAudioObjectUnknown) }
+    }
+
+    private func terminalType(for streamID: AudioObjectID) -> UInt32? {
+        var terminalType = UInt32(0)
+        guard getUInt32(
+            kAudioStreamPropertyTerminalType,
+            objectID: streamID,
+            scope: kAudioObjectPropertyScopeGlobal,
+            element: kAudioObjectPropertyElementMain,
+            value: &terminalType
+        ) else {
+            return nil
+        }
+        return terminalType
     }
 
     private func hasProperty(
