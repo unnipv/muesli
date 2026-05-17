@@ -58,6 +58,7 @@ final class StreamingDictationController {
     private var fullTranscript = ""
     private var isActive = false
     private var activeSessionID: UUID?
+    private var streamStateTask: Task<Void, Never>?
     private let chunkSamples = 8960  // 560ms at 16kHz
     private static let stopDrainTimeout: TimeInterval = 1.0
 
@@ -125,7 +126,7 @@ final class StreamingDictationController {
         }
 
         // Init stream state in background — audio buffers queue while this runs
-        Task {
+        let initializationTask = Task {
             do {
                 let state = try await transcriber.makeStreamState()
                 guard self.isCurrentSession(sessionID) else { return }
@@ -138,6 +139,7 @@ final class StreamingDictationController {
                 self.failActiveSession(sessionID: sessionID, error: error)
             }
         }
+        streamStateTask = initializationTask
         return true
     }
 
@@ -170,7 +172,10 @@ final class StreamingDictationController {
         }
 
         startDrainIfNeeded(sessionID: sessionID)
+        let initializationTask = streamStateTask
         Task {
+            await initializationTask?.value
+            self.startDrainIfNeeded(sessionID: sessionID)
             await self.waitForDrain(sessionID: sessionID, timeout: Self.stopDrainTimeout)
             let transcript = self.finishStoppedSession(sessionID: sessionID)
             completion(transcript)
@@ -190,6 +195,8 @@ final class StreamingDictationController {
     private func resetActiveSession(cancelRecorder: Bool) {
         isActive = false
         activeSessionID = nil
+        streamStateTask?.cancel()
+        streamStateTask = nil
         if cancelRecorder {
             recorder.cancel()
         }
@@ -275,6 +282,7 @@ final class StreamingDictationController {
     private func finishStoppedSession(sessionID: UUID) -> String {
         guard isCurrentSession(sessionID) else { return fullTranscript }
         activeSessionID = nil
+        streamStateTask = nil
         queueLock.withLock {
             chunkQueue.removeAll()
         }

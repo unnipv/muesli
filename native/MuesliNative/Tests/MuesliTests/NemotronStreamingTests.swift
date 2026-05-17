@@ -140,6 +140,29 @@ struct StreamingDictationControllerTests {
         #expect(recorder.startCalls == 1)
         controller.cancel()
     }
+
+    @available(macOS 15, *)
+    @Test("stop waits for pending stream state before draining queued audio")
+    func stopWaitsForPendingStreamStateBeforeDrainingQueuedAudio() async {
+        let transcriber = DelayedNemotronStreamingTranscriber()
+        let recorder = InspectableStreamingDictationRecorder()
+        let controller = StreamingDictationController(
+            transcriber: transcriber,
+            recorder: recorder
+        )
+
+        #expect(controller.start() == true)
+        recorder.emit(samples: [Float](repeating: 0.2, count: 8960))
+
+        async let stoppedText = stop(controller)
+        try? await Task.sleep(for: .milliseconds(25))
+        #expect(await transcriber.transcribeCalls == 0)
+
+        await transcriber.releaseState()
+        let text = await stoppedText
+        #expect(text == " hello")
+        #expect(await transcriber.transcribeCalls == 1)
+    }
 }
 
 private final class FailingStreamingDictationRecorder: StreamingDictationRecording {
@@ -204,6 +227,10 @@ private final class InspectableStreamingDictationRecorder: StreamingDictationRec
         startedPreferredInputDeviceID = preferredInputDeviceID
     }
 
+    func emit(samples: [Float]) {
+        onAudioBuffer?(samples)
+    }
+
     func stop() -> URL? {
         stopCalls += 1
         return nil
@@ -211,6 +238,38 @@ private final class InspectableStreamingDictationRecorder: StreamingDictationRec
 
     func cancel() {
         cancelCalls += 1
+    }
+}
+
+@available(macOS 15, *)
+private actor DelayedNemotronStreamingTranscriber: NemotronStreamingTranscribing {
+    private var continuation: CheckedContinuation<Void, Never>?
+    private var released = false
+    private(set) var transcribeCalls = 0
+
+    func makeStreamState() async throws -> NemotronStreamingTranscriber.StreamState {
+        if !released {
+            await withCheckedContinuation { continuation in
+                self.continuation = continuation
+            }
+        }
+        return try await NemotronStreamingTranscriber().makeStreamState()
+    }
+
+    func releaseState() {
+        released = true
+        if let continuation {
+            self.continuation = nil
+            continuation.resume()
+        }
+    }
+
+    func transcribeChunk(
+        samples: [Float],
+        state: inout NemotronStreamingTranscriber.StreamState
+    ) async throws -> String {
+        transcribeCalls += 1
+        return " hello"
     }
 }
 
