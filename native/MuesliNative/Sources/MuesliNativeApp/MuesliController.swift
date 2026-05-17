@@ -4100,11 +4100,7 @@ final class MuesliController: NSObject {
             setState(.preparing)
             meetingMonitor.suppressWhileActive()
             meetingMonitor.refreshState()
-            dictationAudioSessionManager.arm(
-                source: "hotkey_arm",
-                duckingEnabled: config.muteSystemAudioDuringDictation,
-                mediaPauseEnabled: config.pauseMediaDuringDictation
-            )
+            dictationAudioSessionManager.arm(source: "hotkey_arm")
         }
     }
 

@@ -41,28 +41,6 @@ private final class NemotronStreamingTranscriberAdapter: NemotronStreamingTransc
 }
 
 @available(macOS 15, *)
-private final class OneShotBoolContinuation: @unchecked Sendable {
-    private let lock = NSLock()
-    private var continuation: CheckedContinuation<Bool, Never>?
-    private var didResume = false
-
-    init(_ continuation: CheckedContinuation<Bool, Never>) {
-        self.continuation = continuation
-    }
-
-    func resume(_ value: Bool) {
-        let continuationToResume = lock.withLock { () -> CheckedContinuation<Bool, Never>? in
-            guard !didResume else { return nil }
-            didResume = true
-            let continuation = self.continuation
-            self.continuation = nil
-            return continuation
-        }
-        continuationToResume?.resume(returning: value)
-    }
-}
-
-@available(macOS 15, *)
 final class StreamingDictationController {
     private enum DrainResult {
         case finished
@@ -431,24 +409,18 @@ final class StreamingDictationController {
         timeout: TimeInterval
     ) async -> Bool {
         guard let task else { return true }
-        let initialized = await withCheckedContinuation { continuation in
-            let gate = OneShotBoolContinuation(continuation)
-
-            Task { [weak self] in
-                await task.value
-                guard self != nil else { return }
-                gate.resume(true)
-            }
-            Task {
-                try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-                task.cancel()
-                gate.resume(false)
-            }
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            guard isCurrentSession(sessionID) else { return false }
+            if streamState != nil { return true }
+            if streamStateTask == nil { return true }
+            try? await Task.sleep(nanoseconds: 10_000_000)
         }
-        if !initialized, isCurrentSession(sessionID), streamState == nil {
+        task.cancel()
+        if isCurrentSession(sessionID), streamState == nil {
             fputs("[streaming-dictation] stream state init timed out during stop\n", stderr)
         }
-        return initialized
+        return false
     }
 
     private func finishStoppedSession(sessionID: UUID) -> String {

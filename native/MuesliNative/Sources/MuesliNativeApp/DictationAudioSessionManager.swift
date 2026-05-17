@@ -128,7 +128,7 @@ final class DictationAudioSessionManager: @unchecked Sendable {
         recorder.currentPower()
     }
 
-    func arm(source: String, duckingEnabled: Bool, mediaPauseEnabled: Bool) {
+    func arm(source: String) {
         let sessionID = ensureSession()
         emit(.armed(sessionID, source: source))
         emitLatency("ui_armed")

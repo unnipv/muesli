@@ -9,7 +9,7 @@ struct DictationAudioSessionManagerTests {
     func armActivatesWarmEngineWithoutStartingCapture() {
         let harness = Harness(routeKind: .speakerLike)
 
-        harness.manager.arm(source: "hotkey", duckingEnabled: true, mediaPauseEnabled: false)
+        harness.manager.arm(source: "hotkey")
         harness.wait()
 
         #expect(harness.recorder.activateCalls == 1)
@@ -26,7 +26,7 @@ struct DictationAudioSessionManagerTests {
 
         harness.manager.refreshRoute(reason: "route-change", canWarmUp: true)
         let startedAt = Date()
-        harness.manager.arm(source: "hotkey", duckingEnabled: true, mediaPauseEnabled: false)
+        harness.manager.arm(source: "hotkey")
         let elapsed = Date().timeIntervalSince(startedAt)
         harness.wait()
 
@@ -39,7 +39,7 @@ struct DictationAudioSessionManagerTests {
     func beginRecordingReusesDuplicateActivation() {
         let harness = Harness(routeKind: .speakerLike)
 
-        harness.manager.arm(source: "hotkey", duckingEnabled: true, mediaPauseEnabled: false)
+        harness.manager.arm(source: "hotkey")
         harness.manager.beginRecording(mode: "prepare", duckingEnabled: true, mediaPauseEnabled: false)
         harness.manager.beginRecording(mode: "start", duckingEnabled: true, mediaPauseEnabled: false)
         harness.wait()
@@ -60,7 +60,7 @@ struct DictationAudioSessionManagerTests {
         let harness = Harness(routeKind: .speakerLike)
         harness.recorder.activateError = NSError(domain: "DictationAudioSessionManagerTests", code: 1)
 
-        harness.manager.arm(source: "hotkey", duckingEnabled: true, mediaPauseEnabled: false)
+        harness.manager.arm(source: "hotkey")
         harness.manager.beginRecording(mode: "hold-start", duckingEnabled: true, mediaPauseEnabled: false)
         harness.wait()
 
@@ -85,7 +85,7 @@ struct DictationAudioSessionManagerTests {
     func headphoneRouteSkipsDucking() {
         let harness = Harness(routeKind: .headphoneLike, preferredInputDeviceID: 82)
 
-        harness.manager.arm(source: "hotkey", duckingEnabled: true, mediaPauseEnabled: false)
+        harness.manager.arm(source: "hotkey")
         harness.manager.beginRecording(mode: "prepare", duckingEnabled: true, mediaPauseEnabled: false)
         harness.wait()
 
@@ -98,7 +98,7 @@ struct DictationAudioSessionManagerTests {
     func unknownRouteDucksDuringOutputTransitions() {
         let harness = Harness(routeKind: .unknown)
 
-        harness.manager.arm(source: "hotkey", duckingEnabled: true, mediaPauseEnabled: false)
+        harness.manager.arm(source: "hotkey")
         harness.manager.beginRecording(mode: "prepare", duckingEnabled: true, mediaPauseEnabled: false)
         harness.wait()
 
@@ -112,7 +112,7 @@ struct DictationAudioSessionManagerTests {
         let harness = Harness(routeKind: .headphoneLike, preferredInputDeviceID: 82)
         harness.route.cachedPreferredInputDeviceID = nil
 
-        harness.manager.arm(source: "hotkey", duckingEnabled: false, mediaPauseEnabled: false)
+        harness.manager.arm(source: "hotkey")
         harness.wait()
 
         #expect(harness.route.preferredInputCalls == 1)
@@ -149,7 +149,7 @@ struct DictationAudioSessionManagerTests {
     func beginRecordingRefreshesRouteChangedAfterArm() {
         let harness = Harness(routeKind: .headphoneLike, preferredInputDeviceID: 82)
 
-        harness.manager.arm(source: "hotkey", duckingEnabled: true, mediaPauseEnabled: false)
+        harness.manager.arm(source: "hotkey")
         harness.wait()
         harness.route.routeKind = .speakerLike
         harness.route.preferredInputDeviceID = nil
@@ -169,7 +169,7 @@ struct DictationAudioSessionManagerTests {
     func holdStartUsesCachedRouteSnapshot() {
         let harness = Harness(routeKind: .headphoneLike, preferredInputDeviceID: 82)
 
-        harness.manager.arm(source: "hotkey", duckingEnabled: false, mediaPauseEnabled: false)
+        harness.manager.arm(source: "hotkey")
         harness.wait()
         harness.manager.beginRecording(mode: "hold-start", duckingEnabled: false, mediaPauseEnabled: false)
         harness.wait()
@@ -278,7 +278,7 @@ struct DictationAudioSessionManagerTests {
         let harness = Harness(routeKind: .headphoneLike, preferredInputDeviceID: 82)
 
         harness.manager.refreshRoute(reason: "route-change", delay: 0.2, canWarmUp: true)
-        harness.manager.arm(source: "hotkey", duckingEnabled: false, mediaPauseEnabled: false)
+        harness.manager.arm(source: "hotkey")
         harness.wait()
 
         #expect(harness.route.refreshCalls == 1)
@@ -318,7 +318,7 @@ struct DictationAudioSessionManagerTests {
     func mediaPauseRequestedWithCurrentRoute() {
         let harness = Harness(routeKind: .speakerLike)
 
-        harness.manager.arm(source: "hotkey", duckingEnabled: false, mediaPauseEnabled: true)
+        harness.manager.arm(source: "hotkey")
         harness.wait()
         #expect(harness.media.beginCalls.isEmpty)
 
@@ -334,7 +334,7 @@ struct DictationAudioSessionManagerTests {
     func beginRecordingAfterArmStartsAudioControlsOnce() {
         let harness = Harness(routeKind: .speakerLike)
 
-        harness.manager.arm(source: "hotkey", duckingEnabled: true, mediaPauseEnabled: true)
+        harness.manager.arm(source: "hotkey")
         harness.wait()
         #expect(harness.media.beginCalls.isEmpty)
         #expect(harness.ducking.beginCalls.isEmpty)
@@ -351,7 +351,7 @@ struct DictationAudioSessionManagerTests {
     func shortArmedTapDoesNotPauseOrDuckAudio() {
         let harness = Harness(routeKind: .speakerLike)
 
-        harness.manager.arm(source: "hotkey", duckingEnabled: true, mediaPauseEnabled: true)
+        harness.manager.arm(source: "hotkey")
         harness.wait()
         harness.manager.cancel(reason: "short-tap")
         harness.wait()
@@ -378,7 +378,7 @@ struct DictationAudioSessionManagerTests {
     func cancelTearsDownWarmRecorderGraph() {
         let harness = Harness(routeKind: .speakerLike)
 
-        harness.manager.arm(source: "hotkey", duckingEnabled: false, mediaPauseEnabled: false)
+        harness.manager.arm(source: "hotkey")
         harness.wait()
         #expect(harness.recorder.keepsAudioGraphWarm)
 
