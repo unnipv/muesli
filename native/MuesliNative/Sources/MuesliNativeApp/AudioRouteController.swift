@@ -27,58 +27,12 @@ enum AudioRouteClassifier {
     static func outputRouteKind(for device: AudioOutputDeviceDescription) -> AudioOutputRouteKind {
         guard device.hasOutputStreams else { return .unknown }
 
-        let normalizedName = (device.name ?? "").lowercased()
-        if containsAny(normalizedName, keywords: headphoneKeywords) {
+        if device.transportType == kAudioDeviceTransportTypeBluetooth
+            || device.transportType == kAudioDeviceTransportTypeBluetoothLE {
             return .headphoneLike
         }
 
-        if device.transportType == kAudioDeviceTransportTypeBluetooth
-            || device.transportType == kAudioDeviceTransportTypeBluetoothLE {
-            return containsAny(normalizedName, keywords: bluetoothSpeakerKeywords)
-                ? .speakerLike
-                : .headphoneLike
-        }
-
         return .speakerLike
-    }
-
-    private static let headphoneKeywords = [
-        "airpods",
-        "earpods",
-        "earbuds",
-        "headphone",
-        "headphones",
-        "headset",
-        "buds",
-        "beats",
-        "wh-",
-        "wf-",
-        "xm3",
-        "xm4",
-        "xm5",
-        "bose qc",
-        "quietcomfort",
-        "jabra",
-        "elite",
-        "galaxy buds",
-        "pixel buds",
-    ]
-
-    private static let bluetoothSpeakerKeywords = [
-        "speaker",
-        "soundbar",
-        "sonos",
-        "homepod",
-        "jbl",
-        "flip",
-        "charge",
-        "boom",
-        "echo",
-        "nest audio",
-    ]
-
-    private static func containsAny(_ value: String, keywords: [String]) -> Bool {
-        keywords.contains { value.contains($0) }
     }
 }
 

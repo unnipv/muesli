@@ -8,7 +8,7 @@ struct AudioRouteClassifierTests {
     func airPodsOutputIsHeadphoneLike() {
         let route = AudioRouteClassifier.outputRouteKind(
             for: AudioOutputDeviceDescription(
-                name: "Pranav's AirPods Pro",
+                name: nil,
                 transportType: kAudioDeviceTransportTypeBluetooth,
                 hasOutputStreams: true
             )
@@ -30,17 +30,17 @@ struct AudioRouteClassifierTests {
         #expect(route == .headphoneLike)
     }
 
-    @Test("Bluetooth speakers remain speaker-like")
-    func bluetoothSpeakersRemainSpeakerLike() {
+    @Test("Bluetooth route does not depend on brand or product words")
+    func bluetoothRouteDoesNotDependOnBrandOrProductWords() {
         let route = AudioRouteClassifier.outputRouteKind(
             for: AudioOutputDeviceDescription(
-                name: "JBL Flip",
+                name: "Generic Output",
                 transportType: kAudioDeviceTransportTypeBluetooth,
                 hasOutputStreams: true
             )
         )
 
-        #expect(route == .speakerLike)
+        #expect(route == .headphoneLike)
     }
 
     @Test("built-in speakers are speaker-like")
@@ -56,8 +56,8 @@ struct AudioRouteClassifierTests {
         #expect(route == .speakerLike)
     }
 
-    @Test("wired headphone outputs are headphone-like")
-    func wiredHeadphonesAreHeadphoneLike() {
+    @Test("device names do not override transport classification")
+    func deviceNamesDoNotOverrideTransportClassification() {
         let route = AudioRouteClassifier.outputRouteKind(
             for: AudioOutputDeviceDescription(
                 name: "External Headphones",
@@ -66,7 +66,7 @@ struct AudioRouteClassifierTests {
             )
         )
 
-        #expect(route == .headphoneLike)
+        #expect(route == .speakerLike)
     }
 
     @Test("devices without output streams are unknown")
