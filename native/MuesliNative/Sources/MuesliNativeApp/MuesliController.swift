@@ -3677,7 +3677,11 @@ final class MuesliController: NSObject {
 
     private func isMutedMeetingDetectionCandidate(_ candidate: MeetingCandidate) -> Bool {
         guard let sourceBundleID = candidate.sourceBundleID else { return false }
-        return config.mutedMeetingDetectionAppBundleIDs.contains(sourceBundleID)
+        return isMutedMeetingDetectionBundleID(sourceBundleID)
+    }
+
+    private func isMutedMeetingDetectionBundleID(_ bundleID: String) -> Bool {
+        config.mutedMeetingDetectionAppBundleIDs.contains(bundleID)
     }
 
     private func disarmMeetingAutoStop() {
@@ -3710,6 +3714,10 @@ final class MuesliController: NSObject {
         guard activeMeetingAutoStop.isArmed,
               activeMeetingSession?.isRecording == true,
               !isStoppingMeetingRecording else {
+            return
+        }
+        if let sourceBundleID = activeMeetingAutoStop.source?.sourceBundleID,
+           isMutedMeetingDetectionBundleID(sourceBundleID) {
             return
         }
 

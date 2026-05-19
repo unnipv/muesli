@@ -1326,7 +1326,10 @@ private struct TitleContainerWidthPreferenceKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
 
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
+        let next = nextValue()
+        if next > 0 {
+            value = next
+        }
     }
 }
 
