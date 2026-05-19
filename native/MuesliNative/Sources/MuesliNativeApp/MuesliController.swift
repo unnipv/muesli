@@ -3667,7 +3667,17 @@ final class MuesliController: NSObject {
               Date().timeIntervalSince(observedAt) <= 15 else {
             return nil
         }
+        guard !isMutedMeetingDetectionCandidate(candidate) else {
+            latestMeetingActivityCandidate = nil
+            latestMeetingActivityCandidateObservedAt = nil
+            return nil
+        }
         return MeetingAutoStopSource(candidate: candidate)
+    }
+
+    private func isMutedMeetingDetectionCandidate(_ candidate: MeetingCandidate) -> Bool {
+        guard let sourceBundleID = candidate.sourceBundleID else { return false }
+        return config.mutedMeetingDetectionAppBundleIDs.contains(sourceBundleID)
     }
 
     private func disarmMeetingAutoStop() {

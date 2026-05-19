@@ -610,7 +610,7 @@ private actor MeetingDetectionService {
             browserMeetings: collectedSignals.browserMeetings,
             foregroundBundleID: collectedSignals.foregroundBundleID,
             visibility: context.promptVisibility,
-            candidate: activityCandidate,
+            candidate: unmutedActivityCandidate,
             keepSuspicious: context.isRecording || context.isStartingRecording,
             now: now
         )
