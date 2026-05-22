@@ -3617,11 +3617,7 @@ final class MuesliController: NSObject {
                     self.setState(.idle)
                     self.statusBarController?.refresh()
                 }
-                if self.backgroundMeetingProcessingCount == 0,
-                   !self.isMeetingRecording(),
-                   !self.isStartingMeetingRecording {
-                    self.endMeetingActivity()
-                }
+                self.endMeetingActivity()
                 self.historyWindowController?.reload()
                 self.syncAppState()
                 if let meetingResult {
@@ -4102,6 +4098,7 @@ final class MuesliController: NSObject {
     }
 
     private func endMeetingActivity() {
+        guard backgroundMeetingProcessingCount == 0 else { return }
         guard let activity = meetingActivity else { return }
         ProcessInfo.processInfo.endActivity(activity)
         meetingActivity = nil
