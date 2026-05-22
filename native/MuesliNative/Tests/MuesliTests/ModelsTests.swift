@@ -1160,6 +1160,31 @@ struct HotkeyMonitorTests {
         #expect(toggleStartCount == 1)
     }
 
+    @Test("combination toggle cancellation resets without firing stop")
+    @MainActor
+    func combinationToggleCancellationResetsWithoutFiringStop() async throws {
+        let monitor = HotkeyMonitor(startDelay: 0.03)
+        monitor.configure(HotkeyConfig.combination(modifiers: [.command, .shift], keyCode: 15))
+        var toggleStartCount = 0
+        var toggleStopCount = 0
+        monitor.onToggleStart = {
+            toggleStartCount += 1
+        }
+        monitor.onToggleStop = {
+            toggleStopCount += 1
+        }
+
+        monitor.handleCombinationForTests(type: .keyDown, keyCode: 15, flags: [.command, .shift])
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(monitor.isToggleRecording)
+
+        monitor.cancelToggleMode()
+
+        #expect(!monitor.isToggleRecording)
+        #expect(toggleStartCount == 1)
+        #expect(toggleStopCount == 0)
+    }
+
     @Test("combination shortcut cancels when modifiers release before threshold")
     @MainActor
     func combinationShortcutCancelsWhenModifiersReleaseBeforeThreshold() async throws {

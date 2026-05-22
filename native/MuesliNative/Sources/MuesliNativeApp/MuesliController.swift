@@ -2860,6 +2860,7 @@ final class MuesliController: NSObject {
                 if self.meetingStartMeetingID == meetingID {
                     self.disarmMeetingAutoStop()
                     self.resolveLiveMeetingAfterStartFailure(id: meetingID)
+                    self.cancelMeetingRecordingHotkeyToggleAfterFailedStart(meetingID: meetingID)
                     self.meetingMonitor.resumeAfterCooldown()
                     self.meetingMonitor.refreshState()
                     self.statusBarController?.setStatus("Idle")
@@ -2873,6 +2874,7 @@ final class MuesliController: NSObject {
                     fputs("[muesli-native] failed to start meeting: \(error)\n", stderr)
                     self.disarmMeetingAutoStop()
                     self.resolveLiveMeetingAfterStartFailure(id: meetingID)
+                    self.cancelMeetingRecordingHotkeyToggleAfterFailedStart(meetingID: meetingID)
                     self.meetingMonitor.resumeAfterCooldown()
                     self.meetingMonitor.refreshState()
                     self.statusBarController?.setStatus("Idle")
@@ -3082,6 +3084,7 @@ final class MuesliController: NSObject {
             canceledMeetingStartIDs.insert(meetingID)
             meetingStartTask?.cancel()
             resolveLiveMeetingAfterStartFailure(id: meetingID)
+            cancelMeetingRecordingHotkeyToggleAfterFailedStart(meetingID: meetingID)
             meetingMonitor.resumeAfterCooldown()
             meetingMonitor.refreshState()
             meetingStartTask = nil
@@ -3110,14 +3113,24 @@ final class MuesliController: NSObject {
 
     private func finishMeetingStartAttempt(meetingID: Int64) {
         guard meetingStartMeetingID == meetingID else { return }
+        let didStartActiveSession = activeMeetingID == meetingID && activeMeetingSession != nil
         canceledMeetingStartIDs.remove(meetingID)
         meetingStartTask = nil
         meetingStartMeetingID = nil
         isStartingMeetingRecording = false
         updateMeetingStartStatus(nil)
         updateMeetingNotificationVisibility()
+        if !didStartActiveSession {
+            meetingRecordingHotkeyMonitor.cancelToggleMode()
+        }
         syncAppState()
         syncDictationRecorderWarmup(reason: "meeting-start-finished")
+    }
+
+    private func cancelMeetingRecordingHotkeyToggleAfterFailedStart(meetingID: Int64) {
+        guard meetingStartMeetingID == meetingID else { return }
+        guard activeMeetingID != meetingID || activeMeetingSession == nil else { return }
+        meetingRecordingHotkeyMonitor.cancelToggleMode()
     }
 
     private func startMeetingRecordingWithSystemAudioRecovery(
