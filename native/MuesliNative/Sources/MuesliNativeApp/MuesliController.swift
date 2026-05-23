@@ -4098,7 +4098,9 @@ final class MuesliController: NSObject {
     }
 
     private func endMeetingActivity() {
-        guard backgroundMeetingProcessingCount == 0 else { return }
+        guard backgroundMeetingProcessingCount == 0,
+              !isMeetingRecording(),
+              !isStartingMeetingRecording else { return }
         guard let activity = meetingActivity else { return }
         ProcessInfo.processInfo.endActivity(activity)
         meetingActivity = nil
