@@ -33,4 +33,31 @@ struct MeetingNotificationControllerTests {
         #expect(MeetingNotificationController.firesAutoDismissCallbackAfterFade(wasDismissPaused: false))
         #expect(!MeetingNotificationController.firesAutoDismissCallbackAfterFade(wasDismissPaused: true))
     }
+
+    @Test("Completion notification shows only when no prompt is active")
+    func completionNotificationRequiresIdleNotificationSurface() {
+        #expect(MeetingCompletionNotificationPolicy.shouldShow(
+            isMeetingRecording: false,
+            isStartingMeetingRecording: false,
+            hasPresentedMeetingCandidate: false,
+            isShowingCalendarNotification: false,
+            isMeetingNotificationVisible: false
+        ))
+
+        #expect(!MeetingCompletionNotificationPolicy.shouldShow(
+            isMeetingRecording: false,
+            isStartingMeetingRecording: false,
+            hasPresentedMeetingCandidate: true,
+            isShowingCalendarNotification: false,
+            isMeetingNotificationVisible: true
+        ))
+
+        #expect(!MeetingCompletionNotificationPolicy.shouldShow(
+            isMeetingRecording: false,
+            isStartingMeetingRecording: false,
+            hasPresentedMeetingCandidate: false,
+            isShowingCalendarNotification: true,
+            isMeetingNotificationVisible: true
+        ))
+    }
 }

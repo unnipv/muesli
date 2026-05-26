@@ -66,6 +66,22 @@ enum MeetingTemplateSelectionError: Error, LocalizedError {
     }
 }
 
+enum MeetingCompletionNotificationPolicy {
+    static func shouldShow(
+        isMeetingRecording: Bool,
+        isStartingMeetingRecording: Bool,
+        hasPresentedMeetingCandidate: Bool,
+        isShowingCalendarNotification: Bool,
+        isMeetingNotificationVisible: Bool
+    ) -> Bool {
+        !isMeetingRecording
+            && !isStartingMeetingRecording
+            && !hasPresentedMeetingCandidate
+            && !isShowingCalendarNotification
+            && !isMeetingNotificationVisible
+    }
+}
+
 enum MeetingRetranscriptionError: Error, LocalizedError {
     case controllerUnavailable
     case recordingUnavailable
@@ -3665,8 +3681,13 @@ final class MuesliController: NSObject {
                 }
                 TelemetryDeck.signal("meeting.completed")
 
-                self.presentedMeetingCandidate = nil
-                if !self.isMeetingRecording() && !self.isStartingMeetingRecording {
+                if MeetingCompletionNotificationPolicy.shouldShow(
+                    isMeetingRecording: self.isMeetingRecording(),
+                    isStartingMeetingRecording: self.isStartingMeetingRecording,
+                    hasPresentedMeetingCandidate: self.presentedMeetingCandidate != nil,
+                    isShowingCalendarNotification: self.isShowingCalendarNotification,
+                    isMeetingNotificationVisible: self.meetingNotification.isVisible
+                ) {
                     let savedMeetingID = completedMeetingID
                     self.meetingNotification.show(
                         title: "Transcription complete",
@@ -3681,8 +3702,8 @@ final class MuesliController: NSObject {
                             self.historyWindowController?.show()
                         }
                     )
-                    self.updateMeetingNotificationVisibility()
                 }
+                self.updateMeetingNotificationVisibility()
             }
         }
     }
