@@ -6,36 +6,36 @@
         <language>en</language>
         <!-- Items are added by generate_appcast or the release script -->
         <item>
-            <title>0.6.8</title>
-            <pubDate>Mon, 25 May 2026 23:46:57 +0530</pubDate>
+            <title>0.6.9</title>
+            <pubDate>Wed, 27 May 2026 23:34:28 +0530</pubDate>
             <description><![CDATA[
-<h2>Muesli 0.6.8</h2>
-<p>This release focuses on making dictation and meeting transcription more reliable in real Mac desktop conditions.</p>
-<h3>What's new</h3>
-<ol>
-<li><strong>Dictation audio handling is much safer.</strong> Muesli now pauses or mutes other audio during dictation when configured, restores playback afterward, and avoids breaking the microphone route when headphones such as AirPods are active.</li>
-<li><strong>Hotkey dictation is fixed.</strong> The dictation trigger no longer gets stuck in the preparing state or fails before the microphone starts.</li>
-<li><strong>Cleaner meeting transcription with LocalVQE.</strong> Muesli now bundles LocalVQE for on-device acoustic echo cancellation, improving meeting transcription quality when speaker audio can bleed into the mic.</li>
-<li><strong>Meeting capture is more resilient.</strong> Meeting detection, recording lifecycle, auto-stop behavior, diarization formatting, and diagnostics were strengthened.</li>
-<li><strong>Update checks are less confusing.</strong> The reliable update path is now the menu bar Check for Updates flow, with the in-app About screen showing update status without trying to duplicate the installer UI.</li>
-<li><strong>Sidebar navigation is easier to click.</strong> Sidebar rows now use the full highlighted row as the click target instead of only the text or icon.</li>
-<li><strong>Packaging was hardened.</strong> The bundled LocalVQE runtime is deeply signed, notarized, stapled, and verified inside the shipped DMG.</li>
-</ol>
+<h2>Muesli 0.6.9</h2>
+<p>Native macOS app — dictation + meeting transcription on Apple Silicon.</p>
 <h3>Install</h3>
 <ul>
-<li>Download <code>Muesli-0.6.8.dmg</code></li>
+<li>Download <code>Muesli-0.6.9.dmg</code></li>
 <li>Open the DMG and drag Muesli to Applications</li>
 <li>Launch from Applications</li>
 </ul>
 <p>Signed, notarized, and stapled by Apple.</p>
 ]]></description>
+            <sparkle:version>0.6.9</sparkle:version>
+            <sparkle:shortVersionString>0.6.9</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>10.13</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <enclosure url="https://github.com/pHequals7/muesli/releases/download/v0.6.9/Muesli-0.6.9.dmg" length="73446621" type="application/octet-stream" sparkle:edSignature="uK+zNpzCPytfT9O+1HvkhoHeh3VkhGF/GxLxu495eoAxwPMrxRrs83t5V7DozGoEry/9K6k7aLiZKLEg8/IQAA=="/>
+            <sparkle:deltas>
+            </sparkle:deltas>
+        </item>
+        <item>
+            <title>0.6.8</title>
+            <pubDate>Mon, 25 May 2026 23:46:57 +0530</pubDate>
             <sparkle:version>0.6.8</sparkle:version>
             <sparkle:shortVersionString>0.6.8</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>10.13</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <enclosure url="https://github.com/pHequals7/muesli/releases/download/v0.6.8/Muesli-0.6.8.dmg" length="73414000" type="application/octet-stream" sparkle:edSignature="cHC0J/iCNuFKxGQLWhT85JIQDEGcM5bodINux+x5XxGCJ90Nb7lXkT0/mW0t42SXx7S9tZ+5o2A6D5OITQ0DDA=="/>
-            <sparkle:deltas>
-            </sparkle:deltas>
+            <sparkle:deltas/>
         </item>
         <item>
             <title>0.6.7</title>
@@ -45,16 +45,6 @@
             <sparkle:minimumSystemVersion>10.13</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <enclosure url="https://github.com/pHequals7/muesli/releases/download/v0.6.7/Muesli-0.6.7.dmg" length="63371647" type="application/octet-stream" sparkle:edSignature="9MsAH/ykgy/odyEO11DpO0r1dyZTLIyCzouo7VKm4Zctr1ffMnc2le1JsnV2GIp+qMwUU9VWxYxvxzj0DC5XBA=="/>
-        </item>
-        <item>
-            <title>0.6.6</title>
-            <pubDate>Sun, 03 May 2026 14:54:15 +0530</pubDate>
-            <sparkle:version>0.6.6</sparkle:version>
-            <sparkle:shortVersionString>0.6.6</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>10.13</sparkle:minimumSystemVersion>
-            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <enclosure url="https://github.com/pHequals7/muesli/releases/download/v0.6.6/Muesli-0.6.6.dmg" length="62824130" type="application/octet-stream" sparkle:edSignature="Jl7W4HCu1tPNr3eb+DPM8P6cishgSVqOEpqVLmlJTd3HYmOfTg4WhwOmuPuKmP9q0oNF9BD0XJFNTZeGIotQCw=="/>
-            <sparkle:deltas/>
         </item>
     </channel>
 </rss>
